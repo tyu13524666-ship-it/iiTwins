@@ -11,7 +11,7 @@
     {
       "beta": false,
       "name": "LiveContainer (nightly)",
-      "bundleIdentifier": "com.kdt.livecontainer",
+      "bundleIdentifier": "com.tyu.cc886751",
       "developerName": "LiveContainer Team",
       "subtitle": "Run iOS apps without actually installing them!",
       "version": "3.4.50",

@@ -11,7 +11,7 @@
     {
       "beta": false,
       "name": "LiveContainer + SideStore",
-      "bundleIdentifier": "com.kdt.livecontainer",
+      "bundleIdentifier": "com.tyu.cc886751",
       "developerName": "LiveContainer Team",
       "subtitle": "Run iOS apps without actually installing them!",
       "version": "3.6.1",
@@ -131,7 +131,7 @@
   ],
   "news": [
     {
-      "appID": "com.kdt.livecontainer",
+      "appID": "com.tyu.cc886751",
       "caption": "Update of LiveContainer just got released!",
       "date": "2025-08-01T07:55:01Z",
       "identifier": "release-3.6.0",
@@ -142,7 +142,7 @@
       "url": "https://github.com/LiveContainer/LiveContainer/releases/tag/3.6.0"
     },
     {
-      "appID": "com.kdt.livecontainer",
+      "appID": "com.tyu.cc886751",
       "caption": "Update of LiveContainer just got released!",
       "date": "2025-08-19T04:15:32Z",
       "identifier": "release-3.6.1",
