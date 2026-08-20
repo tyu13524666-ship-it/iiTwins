@@ -253,16 +253,30 @@
     }
     
     UIImage* icon = [self generateLiveContainerWrappedIconWithStyle:style];
-    
+
+    // 每個容器必須產生互不相同的識別碼，否則安裝第二個 Web Clip 時
+    // iOS 會視為同一個描述檔而覆蓋掉前一個。
+    NSString* payloadIdentifier = self.bundleIdentifier;
+    NSString* rootPayloadUUID = @"345097fb-d4f7-4a34-ab90-2e3f1ad62eed";
+    NSString* clipLabel = self.displayName;
+    if(containerId.length > 0) {
+        payloadIdentifier = [NSString stringWithFormat:@"%@.%@", self.bundleIdentifier, containerId];
+        // 容器資料夾名稱本身就是 UUID，直接拿來當描述檔 UUID：
+        // 同一容器重做會覆蓋自己，不同容器則能並存。
+        rootPayloadUUID = containerId;
+        NSString* shortId = containerId.length >= 6 ? [containerId substringToIndex:6] : containerId;
+        clipLabel = [NSString stringWithFormat:@"%@ (%@)", self.displayName, shortId];
+    }
+
     NSDictionary *payload = @{
         @"FullScreen": @YES,
         @"Icon": UIImagePNGRepresentation(icon),
         @"IgnoreManifestScope": @YES,
         @"IsRemovable": @YES,
-        @"Label": self.displayName,
+        @"Label": clipLabel,
         @"PayloadDescription": [NSString stringWithFormat:@"Web Clip for launching %@ (%@) in LiveContainer", self.displayName, self.bundlePath.lastPathComponent],
-        @"PayloadDisplayName": self.displayName,
-        @"PayloadIdentifier": self.bundleIdentifier,
+        @"PayloadDisplayName": clipLabel,
+        @"PayloadIdentifier": payloadIdentifier,
         @"PayloadType": @"com.apple.webClip.managed",
         @"PayloadUUID": NSUUID.UUID.UUIDString,
         @"PayloadVersion": @(1),
@@ -276,12 +290,12 @@
         },
         @"PayloadContent": @[payload],
         @"PayloadDescription": payload[@"PayloadDescription"],
-        @"PayloadDisplayName": self.displayName,
-        @"PayloadIdentifier": self.bundleIdentifier,
+        @"PayloadDisplayName": clipLabel,
+        @"PayloadIdentifier": payloadIdentifier,
         @"PayloadOrganization": @"LiveContainer",
         @"PayloadRemovalDisallowed": @(NO),
         @"PayloadType": @"Configuration",
-        @"PayloadUUID": @"345097fb-d4f7-4a34-ab90-2e3f1ad62eed",
+        @"PayloadUUID": rootPayloadUUID,
         @"PayloadVersion": @(1),
     };
 }
