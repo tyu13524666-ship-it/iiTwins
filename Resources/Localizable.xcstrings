@@ -9105,7 +9105,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "بنقل هذا البرنامَج إلى ملفات مستندات خاصة سوف يمنحك هذا صلاحية أضافه التعديلات والتحكم بملفات البرنامَج في برنامَج الملفات، لكن لا يمكن تشغيله من تطبيقات iiTwinss  الاخرى."
+            "value": "بنقل هذا البرنامَج إلى ملفات مستندات خاصة سوف يمنحك هذا صلاحية أضافه التعديلات والتحكم بملفات البرنامَج في برنامَج الملفات، لكن لا يمكن تشغيله من تطبيقات iiTwins  الاخرى."
           }
         },
         "de": {
@@ -9117,19 +9117,19 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Moving this app to Private Document Folder allows you to access its data and tweaks in the Files app, but it can not be run by other iiTwinss."
+            "value": "Moving this app to Private Document Folder allows you to access its data and tweaks in the Files app, but it can not be run by other iiTwins."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mover esta app a la carpeta de documentos privada te permite acceder a sus datos y tweaks en la app Archivos, pero no podrá ser ejecutada por otros iiTwinss."
+            "value": "Mover esta app a la carpeta de documentos privada te permite acceder a sus datos y tweaks en la app Archivos, pero no podrá ser ejecutada por otros iiTwins."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "En déplaçant cette application vers le dossier de documents privés, vous pouvez accéder à ses données et à ses tweaks dans l'application Fichiers, mais elle ne peut pas être lancée par d'autres iiTwinss."
+            "value": "En déplaçant cette application vers le dossier de documents privés, vous pouvez accéder à ses données et à ses tweaks dans l'application Fichiers, mais elle ne peut pas être lancée par d'autres iiTwins."
           }
         },
         "it": {
@@ -9171,7 +9171,7 @@
         "sv": {
           "stringUnit": {
             "state": "translated",
-            "value": "Genom att flytta denna app till privat dokumentmapp kan du komma åt dess data och tweaks i appen Filer, men det kan inte köras av andra iiTwinss."
+            "value": "Genom att flytta denna app till privat dokumentmapp kan du komma åt dess data och tweaks i appen Filer, men det kan inte köras av andra iiTwins."
           }
         },
         "tr": {
@@ -9189,13 +9189,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "将App此转换为私有App允许您在文件App中访问其数据和模块，但它不能由其他iiTwinss运行。"
+            "value": "将App此转换为私有App允许您在文件App中访问其数据和模块，但它不能由其他iiTwins运行。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "將此應用程式移動到私人文件資料夾允許您在檔案應用程式中訪問其資料和補訂，但其他iiTwinss無法執行它。"
+            "value": "將此應用程式移動到私人文件資料夾允許您在檔案應用程式中訪問其資料和補訂，但其他iiTwins無法執行它。"
           }
         }
       }
@@ -9319,19 +9319,19 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Moving this app to App Group allows other iiTwinss to run this app with all its data and tweak preserved. If you want to access its data and tweak again from the file app, move it back."
+            "value": "Moving this app to App Group allows other iiTwins to run this app with all its data and tweak preserved. If you want to access its data and tweak again from the file app, move it back."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mover esta app al grupo de apps permite que otros iiTwinss la ejecuten conservando todos sus datos y tweaks. Si quieres volver a acceder a sus datos y tweaks desde la app Archivos, muévela de nuevo."
+            "value": "Mover esta app al grupo de apps permite que otros iiTwins la ejecuten conservando todos sus datos y tweaks. Si quieres volver a acceder a sus datos y tweaks desde la app Archivos, muévela de nuevo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Déplacer cette application vers un groupe d'apps permet à d'autres iiTwinss de lancer cette application en conservant toutes ses données et ses tweaks. Si vous voulez accéder à nouveau à ses données et à ses tweaks à partir de l'application Fichiers, déplacez-la à nouveau."
+            "value": "Déplacer cette application vers un groupe d'apps permet à d'autres iiTwins de lancer cette application en conservant toutes ses données et ses tweaks. Si vous voulez accéder à nouveau à ses données et à ses tweaks à partir de l'application Fichiers, déplacez-la à nouveau."
           }
         },
         "it": {
@@ -9373,7 +9373,7 @@
         "sv": {
           "stringUnit": {
             "state": "translated",
-            "value": "Genom att flytta denna app till App Group kan andra iiTwinss köra denna app med alla dess data och tweaks bevarade. Om du vill komma åt dess data och justera igen från filappen, flytta den tillbaka."
+            "value": "Genom att flytta denna app till App Group kan andra iiTwins köra denna app med alla dess data och tweaks bevarade. Om du vill komma åt dess data och justera igen från filappen, flytta den tillbaka."
           }
         },
         "tr": {
@@ -9391,13 +9391,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "将此App移动到AppGroup以允许其他iiTwinss运行此App，并保留其所有数据和模块。如果你想访问它的数据和模块，请将其转换为私有App。"
+            "value": "将此App移动到AppGroup以允许其他iiTwins运行此App，并保留其所有数据和模块。如果你想访问它的数据和模块，请将其转换为私有App。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "將此應用程式移動到應用程式組允許其他iiTwinss執行此應用程式，並保留其所有資料和補訂。 如果您想訪問其資料並從檔案應用程式中再次調整，請將其移回。"
+            "value": "將此應用程式移動到應用程式組允許其他iiTwins執行此應用程式，並保留其所有資料和補訂。 如果您想訪問其資料並從檔案應用程式中再次調整，請將其移回。"
           }
         }
       }
@@ -9515,7 +9515,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Benutze die Bundle-ID des iiTwinss"
+            "value": "Benutze die Bundle-ID des iiTwins"
           }
         },
         "en": {
@@ -9670,7 +9670,7 @@
         "sv": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fixar dessa problem genom att använda iiTwinss bunt identifierare när du skriver över huvudbuntet."
+            "value": "Fixar dessa problem genom att använda iiTwins bunt identifierare när du skriver över huvudbuntet."
           }
         },
         "tr": {
@@ -19714,7 +19714,7 @@
         "sv": {
           "stringUnit": {
             "state": "translated",
-            "value": "iiTwinss bundle ID, \"%@\", matchar inte program-Identifierare i entitlements, som förväntar sig att bundle ID ska vara \"%@\". Vissa funktioner kanske inte är tillgängliga."
+            "value": "iiTwins bundle ID, \"%@\", matchar inte program-Identifierare i entitlements, som förväntar sig att bundle ID ska vara \"%@\". Vissa funktioner kanske inte är tillgängliga."
           }
         },
         "tr": {
@@ -20457,31 +20457,31 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إذا حساب من حسابات التطبيقات لا يعمل مع التطبيقات الاخرى في iiTwinss، قد يكون ذلك بسبب أنه محفوظ في سلسله مفاتيح iiTwins الحالي الخاصة. تنظيف سلسله المفاتيح هذا قد تَحُل المشكله، لكن يمكنها أن تسجل الخروج من بعض حساباتك داخل التطبيق، هل تود المتابعه؟"
+            "value": "إذا حساب من حسابات التطبيقات لا يعمل مع التطبيقات الاخرى في iiTwins، قد يكون ذلك بسبب أنه محفوظ في سلسله مفاتيح iiTwins الحالي الخاصة. تنظيف سلسله المفاتيح هذا قد تَحُل المشكله، لكن يمكنها أن تسجل الخروج من بعض حساباتك داخل التطبيق، هل تود المتابعه؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wenn ein Account einer App nicht zwischen iiTwinsn synchronisiert werden kann, liegt das möglicherweise daran, dass es noch im privaten Schlüsselbund des aktuellen iiTwinss gespeichert ist. Das Bereinigen des Schlüsselbundes kann dieses Problem lösen, aber es kann dazu führen, dass Sie sich von einigen Ihrer Accounts abmelden. Fortfahren?"
+            "value": "Wenn ein Account einer App nicht zwischen iiTwinsn synchronisiert werden kann, liegt das möglicherweise daran, dass es noch im privaten Schlüsselbund des aktuellen iiTwins gespeichert ist. Das Bereinigen des Schlüsselbundes kann dieses Problem lösen, aber es kann dazu führen, dass Sie sich von einigen Ihrer Accounts abmelden. Fortfahren?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "If some app's account can not be synced between iiTwinss, it may be due to the app account being still stored in current iiTwins's private keychain. Deleting the keychain may solve this issue, but it may sign you out of some of your accounts. Continue?"
+            "value": "If some app's account can not be synced between iiTwins, it may be due to the app account being still stored in current iiTwins's private keychain. Deleting the keychain may solve this issue, but it may sign you out of some of your accounts. Continue?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Si la cuenta de alguna app no se puede sincronizar entre iiTwinss, puede deberse a que la cuenta sigue almacenada en el llavero privado del iiTwins actual. Eliminar el llavero puede solucionar este problema, pero puede cerrar la sesión de algunas de tus cuentas. ¿Continuar?"
+            "value": "Si la cuenta de alguna app no se puede sincronizar entre iiTwins, puede deberse a que la cuenta sigue almacenada en el llavero privado del iiTwins actual. Eliminar el llavero puede solucionar este problema, pero puede cerrar la sesión de algunas de tus cuentas. ¿Continuar?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Si le compte d'une application ne peut pas être synchronisé entre les iiTwinss, c'est peut-être parce qu'il est encore stocké dans le trousseau privé du iiTwins actuel. Le nettoyage du trousseau peut résoudre ce problème, mais il se peut que vous soyez déconnecté de certains de vos comptes. Continuer ?"
+            "value": "Si le compte d'une application ne peut pas être synchronisé entre les iiTwins, c'est peut-être parce qu'il est encore stocké dans le trousseau privé du iiTwins actuel. Le nettoyage du trousseau peut résoudre ce problème, mais il se peut que vous soyez déconnecté de certains de vos comptes. Continuer ?"
           }
         },
         "it": {
@@ -20523,7 +20523,7 @@
         "sv": {
           "stringUnit": {
             "state": "translated",
-            "value": "Om vissa appars konto inte kan synkroniseras mellan iiTwinss kan det bero på att det fortfarande är lagrat i nuvarande iiTwinss privata nyckelring. Rensa upp nyckelring kan lösa detta problem, men det kan logga ut dig från några av dina konton. Fortsätt?"
+            "value": "Om vissa appars konto inte kan synkroniseras mellan iiTwins kan det bero på att det fortfarande är lagrat i nuvarande iiTwins privata nyckelring. Rensa upp nyckelring kan lösa detta problem, men det kan logga ut dig från några av dina konton. Fortsätt?"
           }
         },
         "tr": {
@@ -24737,7 +24737,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عده iiTwinss"
+            "value": "عده iiTwins"
           }
         },
         "de": {
@@ -24749,25 +24749,25 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Multiple iiTwinss"
+            "value": "Multiple iiTwins"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Múltiples iiTwinss"
+            "value": "Múltiples iiTwins"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Plusieurs iiTwinss"
+            "value": "Plusieurs iiTwins"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "iiTwinss Multipli"
+            "value": "iiTwins Multipli"
           }
         },
         "ja": {
@@ -24803,7 +24803,7 @@
         "sv": {
           "stringUnit": {
             "state": "translated",
-            "value": "Flera iiTwinss"
+            "value": "Flera iiTwins"
           }
         },
         "tr": {
@@ -24939,7 +24939,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "بتثبيت عده iiTwinss، وتحويل عده تطبيقات الى تطبيقات مُشارَكه، يمكنك فتح تطبيق واحد بين جميع iiTwinss مع جميع ملفاتها وبياناتها وأعداداتها."
+            "value": "بتثبيت عده iiTwins، وتحويل عده تطبيقات الى تطبيقات مُشارَكه، يمكنك فتح تطبيق واحد بين جميع iiTwins مع جميع ملفاتها وبياناتها وأعداداتها."
           }
         },
         "de": {
@@ -24951,25 +24951,25 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "By installing multiple iiTwinss, and converting apps to Shared Apps, you can open one app between all iiTwinss with most of its data and settings."
+            "value": "By installing multiple iiTwins, and converting apps to Shared Apps, you can open one app between all iiTwins with most of its data and settings."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Instalando múltiples iiTwinss y convirtiendo las apps en Apps Compartidas, puedes abrir una app entre todos los iiTwinss conservando la mayoría de sus datos y ajustes."
+            "value": "Instalando múltiples iiTwins y convirtiendo las apps en Apps Compartidas, puedes abrir una app entre todos los iiTwins conservando la mayoría de sus datos y ajustes."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "En installant plusieurs iiTwinss et en convertissant les applications en apps partagées, vous pouvez ouvrir une application entre tous les iiTwinss avec la plupart de ses données et paramètres."
+            "value": "En installant plusieurs iiTwins et en convertissant les applications en apps partagées, vous pouvez ouvrir une application entre tous les iiTwins avec la plupart de ses données et paramètres."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Installando più iiTwins e convertendo app in applicazioni condivise, è possibile aprire un'app tra tutti i iiTwinss con la maggior parte dei suoi dati e impostazioni."
+            "value": "Installando più iiTwins e convertendo app in applicazioni condivise, è possibile aprire un'app tra tutti i iiTwins con la maggior parte dei suoi dati e impostazioni."
           }
         },
         "ja": {
@@ -25005,7 +25005,7 @@
         "sv": {
           "stringUnit": {
             "state": "translated",
-            "value": "Genom att installera flera iiTwinss och konvertera appar till delade appar kan du öppna en app mellan alla iiTwinss med de flesta av dess data och inställningar."
+            "value": "Genom att installera flera iiTwins och konvertera appar till delade appar kan du öppna en app mellan alla iiTwins med de flesta av dess data och inställningar."
           }
         },
         "tr": {
@@ -25695,7 +25695,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اسحب iiTwinss لاختيار أي واحد يتم تجربته أولا عند تشغيل التطبيقات المشتركة."
+            "value": "اسحب iiTwins لاختيار أي واحد يتم تجربته أولا عند تشغيل التطبيقات المشتركة."
           }
         },
         "de": {
@@ -25707,7 +25707,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Drag iiTwinss to choose which one is tried first when launching shared apps."
+            "value": "Drag iiTwins to choose which one is tried first when launching shared apps."
           }
         },
         "es": {
@@ -25719,13 +25719,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Faites glisser les iiTwinss pour choisir lequel est essayé en premier lors du lancement d'applications partagées."
+            "value": "Faites glisser les iiTwins pour choisir lequel est essayé en premier lors du lancement d'applications partagées."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Przeciągnij iiTwinss, aby wybrać, który z nich zostanie wypróbowany jako pierwszy podczas uruchamiania udostępnionych aplikacji."
+            "value": "Przeciągnij iiTwins, aby wybrać, który z nich zostanie wypróbowany jako pierwszy podczas uruchamiania udostępnionych aplikacji."
           }
         },
         "ru": {

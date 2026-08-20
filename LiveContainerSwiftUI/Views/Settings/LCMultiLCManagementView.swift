@@ -21,18 +21,22 @@ private struct LaunchPriorityLC: Identifiable, Hashable {
 }
 
 private let knownLiveContainers = [
-    LaunchPriorityLC(scheme: "livecontainer", displayName: "LiveContainer"),
-    LaunchPriorityLC(scheme: "livecontainer2", displayName: "LiveContainer2"),
-    LaunchPriorityLC(scheme: "livecontainer3", displayName: "LiveContainer3")
+    LaunchPriorityLC(scheme: "livecontainer", displayName: "iiTwins"),
+    LaunchPriorityLC(scheme: "iitwins-2", displayName: "iiTwins-2"),
+    LaunchPriorityLC(scheme: "iitwins-3", displayName: "iiTwins-3")
 ]
 
 struct InstallAnotherLCButton : View {
+    // lcName 用於組 URL scheme 與安裝識別，必須維持原本的 LiveContainerN，
+    // 改掉會導致偵測與安裝失效；displayName 才是顯示給使用者看的名稱。
     @State var lcName : String
+    @State var displayName : String
     @State var detected = false
     let delegate : InstallAnotherLCButtonDelegate
     
-    init(lcName: String, delegate: InstallAnotherLCButtonDelegate) {
+    init(lcName: String, displayName: String, delegate: InstallAnotherLCButtonDelegate) {
         self._lcName = State(initialValue: lcName)
+        self._displayName = State(initialValue: displayName)
         self._detected = State(initialValue: UIApplication.shared.canOpenURL(URL(string: "\(lcName.lowercased())://")!))
         self.delegate = delegate
     }
@@ -42,7 +46,7 @@ struct InstallAnotherLCButton : View {
             Task { await delegate.installAnotherLC(name: lcName)}
         } label: {
             HStack {
-                Text(lcName)
+                Text(displayName)
                 Spacer()
                 if detected {
                     Text("✓")
@@ -82,8 +86,8 @@ struct LCMultiLCManagementView : View, InstallAnotherLCButtonDelegate {
     var body: some View {
         Form {
             Section {
-                InstallAnotherLCButton(lcName: "LiveContainer2", delegate: self)
-                InstallAnotherLCButton(lcName: "LiveContainer3", delegate: self)
+                InstallAnotherLCButton(lcName: "iiTwins-2", displayName: "iiTwins-2", delegate: self)
+                InstallAnotherLCButton(lcName: "iiTwins-3", displayName: "iiTwins-3", delegate: self)
             } header: {
                 Text("lc.settings.multiLCInstall".loc)
             }

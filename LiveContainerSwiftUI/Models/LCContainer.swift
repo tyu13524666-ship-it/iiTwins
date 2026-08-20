@@ -66,7 +66,11 @@ class LCContainer : ObservableObject, Hashable {
         }
     }
     
-    init(folderName: String, name: String, isShared : Bool, isolateAppGroup: Bool = false, spoofIdentifierForVendor: Bool = false, bookmarkData: Data? = nil, resolvedContainerURL: URL? = nil) {
+    // spoofIdentifierForVendor 預設開啟：多開同一個 App 時，若兩個容器
+    // 回報相同的 identifierForVendor，服務端可能判定為同一裝置重複登入而互踢。
+    // 從既有 plist 載入的容器走 convenience init，會明確帶入原本的設定值，
+    // 不受這個預設值影響。
+    init(folderName: String, name: String, isShared : Bool, isolateAppGroup: Bool = false, spoofIdentifierForVendor: Bool = true, bookmarkData: Data? = nil, resolvedContainerURL: URL? = nil) {
         self.folderName = folderName
         self.name = name
         self.isShared = isShared
@@ -74,6 +78,10 @@ class LCContainer : ObservableObject, Hashable {
         self.spoofIdentifierForVendor = spoofIdentifierForVendor
         self.storageBookMark = bookmarkData
         self.resolvedContainerURL = resolvedContainerURL
+        // didSet 在 init 期間不會觸發，必須在這裡補上假 ID 的產生
+        if spoofIdentifierForVendor && self.spoofedIdentifier == nil {
+            self.spoofedIdentifier = UUID().uuidString
+        }
     }
     
     convenience init(infoDict : [String : Any], isShared : Bool) {

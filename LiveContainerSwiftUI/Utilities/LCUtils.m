@@ -291,7 +291,7 @@
 
     infoDict[@"CFBundleDisplayName"] = newBundleName;
     infoDict[@"CFBundleName"] = newBundleName;
-    infoDict[@"CFBundleIdentifier"] = [NSString stringWithFormat:@"com.kdt.%@", newBundleName];
+    infoDict[@"CFBundleIdentifier"] = [NSString stringWithFormat:@"com.tyu.%@", newBundleName];
     infoDict[@"CFBundleURLTypes"][0][@"CFBundleURLSchemes"][0] = [newBundleName lowercaseString];
     while([infoDict[@"CFBundleURLTypes"] count] > 1) {
         [infoDict[@"CFBundleURLTypes"] removeLastObject];
