@@ -59,8 +59,30 @@ static BOOL kbDisabled(void) {
            [defaults boolForKey:@"LCDisableGuestRelayout"];
 }
 
+// 聊天列表這類可捲動的元件，內容範圍是自己算的，僅讓視窗重新排版並不會使其
+// 重算，畫面因而留白。此處以極小幅度改變捲動位置再還原，等同代替使用者輕碰
+// 一下，促使其重新計算內容範圍。限制搜尋深度，避免走遍整個畫面結構。
+static void kbNudgeScrollViews(UIView* view, int depth) {
+    if(!view || depth > 6) return;
+    if([view isKindOfClass:UIScrollView.class]) {
+        UIScrollView* scrollView = (UIScrollView*)view;
+        if(!CGRectIsEmpty(scrollView.bounds)) {
+            CGPoint offset = scrollView.contentOffset;
+            [scrollView setContentOffset:CGPointMake(offset.x, offset.y + 0.5) animated:NO];
+            [scrollView setContentOffset:offset animated:NO];
+            [scrollView setNeedsLayout];
+        }
+    }
+    for(UIView* subview in view.subviews) {
+        kbNudgeScrollViews(subview, depth + 1);
+    }
+}
+
 static void kbPostSyntheticDismissal(UIWindow* window) {
     if(!window || CGRectIsEmpty(window.bounds)) return;
+    // 鍵盤與各式浮層自身的視窗不需要處理，補送通知反而可能造成干擾
+    UIViewController* rootVC = window.rootViewController;
+    if(!rootVC || [rootVC isKindOfClass:NSClassFromString(@"UIInputWindowController")]) return;
 
     UIViewController* root = window.rootViewController;
     kbLog(@"  視窗=%@ rootVC=%@ rootView=%@ 安全區下緣=%.1f",
@@ -84,7 +106,10 @@ static void kbPostSyntheticDismissal(UIWindow* window) {
     NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
     [center postNotificationName:UIKeyboardWillChangeFrameNotification object:nil userInfo:userInfo];
     [center postNotificationName:UIKeyboardDidChangeFrameNotification object:nil userInfo:userInfo];
-    kbLog(@"  已補送鍵盤離開通知 frame=%@", NSStringFromCGRect(offscreen));
+
+    // 通知只會讓 app 重排輸入列，可捲動元件的內容範圍仍需另行促使重算
+    kbNudgeScrollViews(window, 0);
+    kbLog(@"  已補送鍵盤離開通知並促使捲動元件重算 frame=%@", NSStringFromCGRect(offscreen));
 }
 
 // 三個 hook 共用：高度確有變動時記錄並補送鍵盤事件。
@@ -97,7 +122,17 @@ static void kbHandleHeightChange(UIWindow* window, NSString* via, CGFloat before
         kbLog(@"  （使用者已停用，不處理）");
         return;
     }
-    dispatch_async(dispatch_get_main_queue(), ^{
+    // setFrame 與 layoutSubviews 會就同一次變動各觸發一次，短時間內合併處理
+    static NSMutableSet* pending = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ pending = [NSMutableSet set]; });
+
+    NSValue* key = [NSValue valueWithNonretainedObject:window];
+    if([pending containsObject:key]) return;
+    [pending addObject:key];
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [pending removeObject:key];
         kbPostSyntheticDismissal(window);
     });
 }
