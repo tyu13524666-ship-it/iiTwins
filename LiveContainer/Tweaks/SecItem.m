@@ -328,8 +328,23 @@ static OSStatus diag_SecKeyGeneratePair(CFDictionaryRef parameters, SecKeyRef *p
 // 只移除「前綴不等於本程式團隊識別碼」的指定，屬於本程式的群組不動，
 // 原本就能正常運作的 app 完全不受影響。
 static NSString* gTeamPrefix = nil;
+static NSString* gContainerTag = nil;
 
-// 需要移除時回傳處理後的字典，否則回傳 nil 表示原樣使用。
+// 移除外來群組後，所有容器都會落在同一個預設群組，彼此的項目互相可見，
+// 造成不同容器讀到對方的登入狀態。容器專屬的 access group 取不到權限，
+// 無法用來隔離，因此改在項目名稱上加註容器識別碼達成區隔：名稱是 app
+// 自行決定的字串，不受權限限制，且讀寫刪都經過同一套轉換，app 本身無感。
+//
+// 只有「指定了外來群組」的請求會被處理，因此帶著本程式群組、原本就正常
+// 運作的 app（例如 LINE 15.x）完全不會被改寫，也不會與被改寫者互相干擾。
+static NSString* taggedName(NSString* original) {
+    if(!gContainerTag) return original;
+    NSString* prefix = [gContainerTag stringByAppendingString:@"#"];
+    if([original hasPrefix:prefix]) return original;
+    return [prefix stringByAppendingString:original ?: @""];
+}
+
+// 需要改寫時回傳處理後的字典，否則回傳 nil 表示原樣使用。
 static NSDictionary* queryWithoutForeignGroup(CFDictionaryRef dict) {
     if(!dict || !gTeamPrefix) return nil;
     NSDictionary* d = (__bridge NSDictionary *)dict;
@@ -339,6 +354,16 @@ static NSDictionary* queryWithoutForeignGroup(CFDictionaryRef dict) {
 
     NSMutableDictionary* copy = d.mutableCopy;
     [copy removeObjectForKey:(__bridge id)kSecAttrAccessGroup];
+
+    // 優先加註在 service 上；沒有 service 的項目改用 account，兩者皆無則
+    // 無從區隔，此時僅移除群組，至少讓存取本身能夠成功。
+    id service = d[(__bridge id)kSecAttrService];
+    id account = d[(__bridge id)kSecAttrAccount];
+    if([service isKindOfClass:[NSString class]]) {
+        copy[(__bridge id)kSecAttrService] = taggedName(service);
+    } else if([account isKindOfClass:[NSString class]]) {
+        copy[(__bridge id)kSecAttrAccount] = taggedName(account);
+    }
     return copy;
 }
 
@@ -496,6 +521,17 @@ static void installRemapHooks(void) {
     }
     gTeamPrefix = [team stringByAppendingString:@"."];
 
+    // 容器識別碼取自 guest app 的資料目錄名稱，各容器天然唯一。
+    const char* home = getenv("HOME");
+    if(home) {
+        gContainerTag = [NSString stringWithUTF8String:home].lastPathComponent;
+    }
+    if(gContainerTag.length == 0) {
+        // 無法識別容器就不做名稱加註，僅移除群組；此時多個容器會共用鑰匙圈
+        gContainerTag = nil;
+        diagWrite(@"警告：取不到容器識別碼，將無法區隔各容器的鑰匙圈項目");
+    }
+
     litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemAdd, remap_SecItemAdd, nil);
     litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemCopyMatching, remap_SecItemCopyMatching, nil);
     litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemUpdate, remap_SecItemUpdate, nil);
@@ -503,7 +539,8 @@ static void installRemapHooks(void) {
     litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateRandomKey, remap_SecKeyCreateRandomKey, nil);
     litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateWithData, remap_SecKeyCreateWithData, nil);
     litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyGeneratePair, remap_SecKeyGeneratePair, nil);
-    diagWrite([NSString stringWithFormat:@"已掛上外來群組移除 hook，保留前綴為 %@ 的群組", gTeamPrefix]);
+    diagWrite([NSString stringWithFormat:@"已掛上外來群組移除 hook，保留前綴為 %@ 的群組；容器識別碼=%@",
+               gTeamPrefix, gContainerTag ?: @"(無，不做區隔)"]);
 }
 
 // 探測各種 access group 的可用性，供判斷可行的替代方案。
