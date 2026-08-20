@@ -214,7 +214,7 @@ struct LCSettingsView: View {
                     Toggle(isOn: $disableKeychainIsolation) {
                         Text("停用鑰匙圈隔離")
                     }
-                    Text("預設會讓同一個 App 的不同容器各自使用獨立的鑰匙圈，以便分別登入不同帳號。若 App 出現解密失敗或登入狀態異常，可開啟此選項改用本程式的鑰匙圈，但屆時多個容器將共用同一份登入資料。")
+                    Text("預設會讓同一個 App 的不同容器各自使用獨立的鑰匙圈，以便分別登入不同帳號。若 App 出現解密失敗或登入狀態異常，可開啟此選項改用本程式的鑰匙圈，但屆時多個容器將共用同一份登入資料。\n\n⚠️ 切換此選項後，已登入的 App 會找不到原本存放的登入資料，很可能需要重新登入。請在切換前先確認重新登入不會造成困擾。")
                         .font(.footnote)
                         .foregroundStyle(.gray)
                     Toggle(isOn: $isolateSecKeys) {

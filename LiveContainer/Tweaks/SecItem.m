@@ -304,7 +304,7 @@ static OSStatus diag_SecKeyGeneratePair(CFDictionaryRef parameters, SecKeyRef *p
 
 // 開啟診斷時建立 log 檔並寫入環境摘要。回傳是否成功啟用。
 static BOOL diagSetup(BOOL isolationEnabled) {
-    if(![NSUserDefaults.standardUserDefaults boolForKey:@"LCKeychainDiagnostics"]) return NO;
+    if(![NSUserDefaults.lcUserDefaults boolForKey:@"LCKeychainDiagnostics"]) return NO;
 
     const char* home = getenv("HOME");
     if(!home) return NO;
@@ -321,7 +321,7 @@ static BOOL diagSetup(BOOL isolationEnabled) {
                [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"?"]);
     diagWrite([NSString stringWithFormat:@"keychain 隔離=%@  金鑰隔離=%@",
                isolationEnabled ? @"開啟" : @"關閉",
-               [NSUserDefaults.standardUserDefaults boolForKey:@"LCIsolateSecKeys"] ? @"開啟" : @"關閉"]);
+               [NSUserDefaults.lcUserDefaults boolForKey:@"LCIsolateSecKeys"] ? @"開啟" : @"關閉"]);
     if(isolationEnabled) {
         diagWrite([NSString stringWithFormat:@"改寫後的 accessGroup=%@", accessGroup ?: @"(nil)"]);
     }
@@ -337,7 +337,7 @@ void SecItemGuestHooksInit(void)  {
     // 停用隔離後，guest app 直接使用宿主的 keychain。由於宿主與原生 App 的
     // bundle ID 不同，系統層級本來就是隔離的；只有「同一個 App 開多個容器」
     // 才需要這個機制。
-    if([NSUserDefaults.standardUserDefaults boolForKey:@"LCDisableKeychainIsolation"]) {
+    if([NSUserDefaults.lcUserDefaults boolForKey:@"LCDisableKeychainIsolation"]) {
         NSLog(@"[LC] keychain isolation fully disabled by user setting");
         // 隔離關閉時原本完全不掛 hook。若使用者開了診斷，仍要掛上純記錄版本，
         // 否則「關閉隔離後為何還是失敗」這個情境永遠觀察不到。
@@ -392,7 +392,7 @@ void SecItemGuestHooksInit(void)  {
     // group，之後就可能無法取用，導致 LINE 這類 App 出現公鑰同步失敗與解密失敗
     // （NELO 記錄的 barrier_publicKeySynced / handleDecryptionFailure）。
     // 一般 keychain 項目（登入 token 等）仍維持隔離，多容器登入不同帳號不受影響。
-    if([NSUserDefaults.standardUserDefaults boolForKey:@"LCIsolateSecKeys"]) {
+    if([NSUserDefaults.lcUserDefaults boolForKey:@"LCIsolateSecKeys"]) {
         litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateRandomKey, new_SecKeyCreateRandomKey, nil);
         litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateWithData, new_SecKeyCreateWithData, nil);
         litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyGeneratePair, new_SecKeyGeneratePair, nil);
