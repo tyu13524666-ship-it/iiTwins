@@ -604,13 +604,8 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
         settings.safeAreaInsetsPortrait = UIEdgeInsetsMake(settings.peripheryInsets.top, settings.peripheryInsets.left, settings.peripheryInsets.bottom, settings.peripheryInsets.right);
     }
     
-    // 將鍵盤遮住的高度併入安全區域的下緣，容器內的 app 便會把輸入列排在其上方。
-    // 放在最後處理，才不會被上方針對方向所做的換算覆蓋。
-    if(self.keyboardInset > 0) {
-        UIEdgeInsets withKeyboard = settings.safeAreaInsetsPortrait;
-        withKeyboard.bottom += self.keyboardInset / _scaleRatio;
-        settings.safeAreaInsetsPortrait = withKeyboard;
-    }
+    // 實測顯示容器內的 app 不理會場景層安全區域的變化，因此不再於此加入鍵盤
+    // 高度，改回直接縮短視窗（見 updateMaximizedFrameWithSettings）。
 
     safeAreaInsets.bottom = 0;
     return safeAreaInsets;
@@ -618,9 +613,12 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
 
 - (void)updateMaximizedFrameWithSettings:(UIMutableApplicationSceneSettings *)settings {
     CGRect maxFrame = UIEdgeInsetsInsetRect(self.view.window.frame, [self updateMaximizedSafeAreaWithSettings:settings]);
-    // 鍵盤的處理改以安全區域告知，不再更動視窗尺寸：實測顯示視窗雖然確實縮短，
-    // 容器內的 app 卻無法據此完成排版，畫面會留下大片空白。安全區域的變化是
-    // 每個 app 原本就會處理的情形，對其而言溫和得多。
+    // 縮短視窗使其底部停在鍵盤上方。實測確認 app 會採用這個高度（畫面經觸碰
+    // 重繪後即正確），問題僅在於它不會主動重排，該部分由下方的抖動處理。
+    if(self.keyboardInset > 0) {
+        maxFrame.size.height -= self.keyboardInset;
+        if(maxFrame.size.height < 120) maxFrame.size.height = 120;
+    }
     self.view.frame = maxFrame;
 }
 
@@ -635,10 +633,9 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
     CGRect kbInWindow = [window convertRect:kbEnd fromWindow:nil];
     CGRect frameInWindow = [self.view.superview convertRect:self.view.frame toView:window];
 
-    // 鍵盤改以安全區域告知後，視窗尺寸不再變動，因此直接以現況計算即可。
-    // （先前為配合「縮短視窗」的做法會在此加回已扣除的高度，那項補償在目前
-    //   的做法下會使數值每次遞增，必須去除。）
-    CGFloat windowBottom = CGRectGetMaxY(frameInWindow);
+    // 視窗會因先前的調整而縮短，須先加回已扣除的高度還原成原始底部，否則會
+    // 得出「已無重疊」而把調整撤銷，造成視窗在兩個高度之間反覆跳動。
+    CGFloat windowBottom = CGRectGetMaxY(frameInWindow) + self.keyboardInset;
     CGFloat overlap = windowBottom - CGRectGetMinY(kbInWindow);
     if(overlap < 0 || CGRectIsEmpty(kbInWindow)) overlap = 0;
 
@@ -681,19 +678,32 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
         [strongSelf.view layoutIfNeeded];
     } completion:nil];
 
-    LCKeyboardDiagLog(self.dataUUID, @"  已將安全區域下緣增加 %.1f（動畫 %.2fs 曲線 %ld）", overlap, duration, (long)curve);
+    LCKeyboardDiagLog(self.dataUUID, @"  已將視窗底部上移 %.1f（動畫 %.2fs 曲線 %ld）", overlap, duration, (long)curve);
 
-    // 容器內的 app 在鍵盤開始移動的當下正忙於自身的處理，此時送出的變更它未必
-    // 理會，畫面因而留白，直到使用者再碰一下才重繪。於動畫結束後補送一次同樣
-    // 的設定，等同代替使用者做那一下，讓它有機會重新排版。
+    // 送出相同的設定不足以促使容器內的 app 重排（實測補送後畫面依舊留白）。
+    // 改於動畫結束後讓尺寸實際變動兩次：先少一點、下一輪再回到正確值。尺寸
+    // 確有改變，app 較難忽略，效果接近使用者手動碰觸畫面。
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((duration + 0.05) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         typeof(self) strongSelf = weakSelf;
-        if(!strongSelf || !strongSelf.isMaximized) return;
+        if(!strongSelf || !strongSelf.isMaximized || strongSelf.keyboardInset <= 0) return;
+
+        CGFloat applied = strongSelf.keyboardInset;
+        strongSelf.keyboardInset = applied + 1;   // 先讓視窗再矮 1pt
         strongSelf.appSceneVC.shouldSkipDebounceOnce = YES;
         [strongSelf.appSceneVC updateSettingsWithBlock:^(UIMutableApplicationSceneSettings *settings) {
             [strongSelf updateMaximizedFrameWithSettings:settings];
         }];
-        LCKeyboardDiagLog(strongSelf.dataUUID, @"  動畫結束後補送一次設定，促使重新排版");
+
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            typeof(self) inner = weakSelf;
+            if(!inner || inner.keyboardInset != applied + 1) return;
+            inner.keyboardInset = applied;        // 再回到正確高度
+            inner.appSceneVC.shouldSkipDebounceOnce = YES;
+            [inner.appSceneVC updateSettingsWithBlock:^(UIMutableApplicationSceneSettings *settings) {
+                [inner updateMaximizedFrameWithSettings:settings];
+            }];
+            LCKeyboardDiagLog(inner.dataUUID, @"  已以 1pt 尺寸抖動促使重新排版");
+        });
     });
 }
 
