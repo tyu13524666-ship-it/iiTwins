@@ -284,12 +284,17 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
 }
 
 // 視窗收起時鍵盤必須跟著收，否則容器內的輸入框仍持有輸入焦點，鍵盤會留在
-// 畫面上蓋住其他內容。輸入框位於另一個 scene，因此以全域方式要求目前的
-// 第一響應者放棄焦點。
+// 畫面上蓋住其他內容。
+//
+// 關閉視窗時 app 隨之結束，鍵盤自然消失；最小化時 app 仍在執行，僅畫面被
+// 隱藏，其自身收不到任何事件。輸入框位於另一個進程，此處直接要求第一響應者
+// 放棄焦點並無作用（日誌顯示指令送出後鍵盤位置完全未變），改以系統層級的
+// 通知傳遞，由注入層在 app 進程內處理。
 - (void)lcDismissKeyboardIfPresented {
-    if(self.keyboardInset <= 0) return;
-    LCKeyboardDiagLog(self.dataUUID, @"視窗收起，主動收回鍵盤（原 inset %.1f）", self.keyboardInset);
-    [UIApplication.sharedApplication sendAction:@selector(resignFirstResponder) to:nil from:nil forEvent:nil];
+    LCKeyboardDiagLog(self.dataUUID, @"視窗收起，通知 app 進程收回鍵盤（原 inset %.1f）", self.keyboardInset);
+    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+                                         CFSTR("com.tyu.iitwins.window.minimized"),
+                                         NULL, NULL, YES);
     self.keyboardInset = 0;
 }
 
@@ -325,7 +330,9 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
 
 - (void)maximizeWindow {
     void (^updateSettingsBlock)(UIMutableApplicationSceneSettings *settings);
-    
+
+    // 切換視窗大小會使版面整個改變，鍵盤應一併收起
+    [self lcDismissKeyboardIfPresented];
     [self.view layoutIfNeeded];
     if (self.isMaximized) {
         updateSettingsBlock = ^(UIMutableApplicationSceneSettings *settings) {

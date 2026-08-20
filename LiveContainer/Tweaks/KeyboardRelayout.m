@@ -123,14 +123,6 @@ static void kbHandleHeightChange(UIWindow* window, NSString* via, CGFloat before
         return;
     }
 
-    // 視窗被收起時高度會降到極小。此時輸入框仍持有輸入焦點，鍵盤會留在畫面上
-    // 蓋住其他內容。先前自視窗端下達收鍵盤的指令無效（跨進程傳不進來），此處
-    // 與 app 同一進程，可直接令其放棄焦點。
-    if(after < 100.0 && before >= 100.0) {
-        [window endEditing:YES];
-        kbLog(@"  視窗已收起，令輸入框放棄焦點");
-        return;
-    }
     // setFrame 與 layoutSubviews 會就同一次變動各觸發一次，短時間內合併處理
     static NSMutableSet* pending = nil;
     static dispatch_once_t once;
@@ -212,6 +204,57 @@ static void kbSafeSwizzle(Class cls, SEL originalSel, SEL replacementSel) {
     }
 }
 
+#pragma mark - 失去焦點時收起鍵盤
+
+// 視窗被收起時，本程式只是把畫面隱藏，容器內 app 的視窗尺寸並未改變，因此
+// 無法由尺寸變化判斷。輸入框此時仍持有輸入焦點，鍵盤會留在畫面上蓋住其他
+// 內容。改為監聽失去焦點類的系統通知，於此時令其放棄焦點。
+//
+// 多工模式下究竟會送出哪一則通知並不確定，因此數則一併監聽並記錄，由日誌
+// 判斷實際觸發者。
+static void kbDismissKeyboardEverywhere(NSString* reason) {
+    if(kbDisabled()) return;
+    BOOL any = NO;
+    for(UIWindow* window in UIApplication.sharedApplication.windows) {
+        if([window endEditing:YES]) any = YES;
+    }
+    kbLog(@"收到「%@」，令輸入框放棄焦點（實際有生效=%d）", reason, (int)any);
+}
+
+// 最小化視窗時 app 仍在執行，僅畫面被隱藏，其自身收不到任何事件。該動作發生
+// 在本程式的視窗端，與 app 分屬不同進程，需以系統層級的通知傳遞。
+static void kbDarwinCallback(CFNotificationCenterRef center, void* observer,
+                             CFStringRef name, const void* object,
+                             CFDictionaryRef userInfo) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        kbDismissKeyboardEverywhere(@"視窗最小化");
+    });
+}
+
+static void kbObserveDeactivation(void) {
+    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(),
+                                    NULL, kbDarwinCallback,
+                                    CFSTR("com.tyu.iitwins.window.minimized"),
+                                    NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
+
+    // 一併監聽失去焦點類的通知作為後備；多工模式下未必送出，由日誌判斷
+    NSArray<NSNotificationName>* names = @[
+        UIApplicationWillResignActiveNotification,
+        UIApplicationDidEnterBackgroundNotification,
+        UISceneWillDeactivateNotification,
+        UISceneDidEnterBackgroundNotification,
+    ];
+    for(NSNotificationName name in names) {
+        [NSNotificationCenter.defaultCenter addObserverForName:name
+                                                        object:nil
+                                                         queue:NSOperationQueue.mainQueue
+                                                    usingBlock:^(NSNotification* note) {
+            kbDismissKeyboardEverywhere(name);
+        }];
+    }
+    kbLog(@"  已監聽最小化通知與 %lu 則失去焦點通知", (unsigned long)names.count);
+}
+
 void KeyboardRelayoutHookInit(void) {
     // 掛載本身即受開關控制。先前僅在處理階段檢查開關，一旦掛載方式有誤便
     // 無從關閉，使用者只能眼看 app 反覆崩潰。
@@ -225,6 +268,7 @@ void KeyboardRelayoutHookInit(void) {
     kbSafeSwizzle(UIWindow.class, @selector(setBounds:), @selector(lcKB_setBounds:));
     kbSafeSwizzle(UIWindow.class, @selector(setFrame:), @selector(lcKB_setFrame:));
     kbSafeSwizzle(UIWindow.class, @selector(layoutSubviews), @selector(lcKB_layoutSubviews));
+    kbObserveDeactivation();
 
     // 延後再記一次，確認 app 啟動後的視窗狀態
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
