@@ -16,6 +16,7 @@ struct LCMultitaskSettingView: View {
     @AppStorage("LCSkipTerminatedScreen", store: LCUtils.appGroupUserDefault) var skipTerminatedScreen = false
     @AppStorage("LCRestartTerminatedApp", store: LCUtils.appGroupUserDefault) var restartTerminatedApp = false
     @AppStorage("LCMaxOneAppOnStage", store: LCUtils.appGroupUserDefault) var onlyOneAppOnStage = false
+    @AppStorage("LCDockWidth", store: LCUtils.appGroupUserDefault) var dockWidth: Double = 70
     @AppStorage("LCHideCollapsedDock", store: LCUtils.appGroupUserDefault) var hideCollapsedDock: Bool = false
     @AppStorage("LCRedirectURLToHost", store: LCUtils.appGroupUserDefault) var redirectURLToHost = false
     // 以「停用」為儲存值，未設定時即為啟用
@@ -73,7 +74,21 @@ struct LCMultitaskSettingView: View {
             }
             
             Section {
-                // Dock 欄寬度改由程式決定（預設 70px），不再開放調整
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("lc.settings.dockWidth".loc)
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Text("\(Int(dockWidth))px")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                    }
+                    Slider(value: $dockWidth, in: 20...120) {
+                        Text("lc.settings.dockWidth".loc)
+                    }
+                    .tint(.accentColor)
+                }
+                .padding(.vertical, 4)
                 Toggle(isOn: $hideCollapsedDock) {
                     Text("lc.settings.hideCollapsedDock".loc)
                 }
