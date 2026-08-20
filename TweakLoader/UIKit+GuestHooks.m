@@ -19,6 +19,14 @@ static void UIKitGuestHooksInit() {
     swizzle(UIApplication.class, @selector(setDelegate:), @selector(hook_setDelegate:));
     swizzle(UIScene.class, @selector(scene:didReceiveActions:fromTransitionContext:), @selector(hook_scene:didReceiveActions:fromTransitionContext:));
     swizzle(UIScene.class, @selector(openURL:options:completionHandler:), @selector(hook_openURL:options:completionHandler:));
+
+    // 視窗高度變動時補送鍵盤事件，促使 app 重新排版（詳見 UIWindow(hook) 的說明）。
+    // 僅在多工模式下需要，且限於本程式會主動縮短視窗的情形。
+    if(NSUserDefaults.isLiveProcess &&
+       ![NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableKeyboardAvoidance"] &&
+       ![NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableGuestRelayout"]) {
+        swizzle(UIWindow.class, @selector(setBounds:), @selector(hook_setBounds:));
+    }
     NSInteger LCOrientationLockDirection = [NSUserDefaults.guestAppInfo[@"LCOrientationLock"] integerValue];
     if(LCOrientationLockDirection != 0 && [UIDevice.currentDevice userInterfaceIdiom] == UIUserInterfaceIdiomPhone) {
         switch (LCOrientationLockDirection) {
@@ -747,9 +755,51 @@ static LCControlAppURLHandling LCHandleControlAppURL(NSURL *url, NSString** modi
 
 @end
 
+#pragma mark - 視窗尺寸變動時促使 app 重新排版
+
+// 多工模式下，本程式會在鍵盤出現時把視窗底部縮到鍵盤上方。實測顯示 app 收到
+// 這個尺寸變動後並不會重新排版，畫面因而留白，直到使用者觸碰螢幕才恢復；由
+// 外部送出設定、調整安全區域、乃至讓尺寸抖動，均無法促成重排。
+//
+// 原因在於這類 app 只依系統鍵盤事件決定輸入列的位置，不理會視窗本身的變化。
+// 由於這段程式與 app 同處一個進程，可直接補送一則「鍵盤已離開畫面」的通知：
+// 此時視窗底部已經停在鍵盤上方，對 app 而言確實不再有鍵盤遮擋，輸入列排回
+// 視窗底部即為正確位置。
+static void LCPostSyntheticKeyboardDismissal(UIWindow* window) {
+    if(!window || CGRectIsEmpty(window.bounds)) return;
+
+    [window setNeedsLayout];
+    [window layoutIfNeeded];
+
+    CGRect offscreen = CGRectMake(0, CGRectGetHeight(window.bounds), CGRectGetWidth(window.bounds), 0);
+    NSValue* frameValue = [NSValue valueWithCGRect:offscreen];
+    NSDictionary* userInfo = @{
+        UIKeyboardFrameBeginUserInfoKey: frameValue,
+        UIKeyboardFrameEndUserInfoKey: frameValue,
+        UIKeyboardAnimationDurationUserInfoKey: @(0.0),
+        UIKeyboardAnimationCurveUserInfoKey: @(UIViewAnimationCurveEaseInOut),
+        UIKeyboardIsLocalUserInfoKey: @(YES),
+    };
+    NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
+    [center postNotificationName:UIKeyboardWillChangeFrameNotification object:nil userInfo:userInfo];
+    [center postNotificationName:UIKeyboardDidChangeFrameNotification object:nil userInfo:userInfo];
+}
+
 @implementation UIWindow(hook)
 - (void)hook_setAutorotates:(BOOL)autorotates forceUpdateInterfaceOrientation:(BOOL)force {
     [self hook_setAutorotates:YES forceUpdateInterfaceOrientation:YES];
+}
+
+- (void)hook_setBounds:(CGRect)bounds {
+    CGSize previous = self.bounds.size;
+    [self hook_setBounds:bounds];
+    // 只在高度確實改變時處理，避免一般排版流程反覆觸發
+    if(fabs(previous.height - bounds.size.height) < 1.0) return;
+
+    // 排到下一輪執行，讓 UIKit 先完成自身對新尺寸的處理
+    dispatch_async(dispatch_get_main_queue(), ^{
+        LCPostSyntheticKeyboardDismissal(self);
+    });
 }
 
 - (void)hook_makeKeyAndVisible {
