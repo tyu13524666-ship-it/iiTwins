@@ -358,6 +358,53 @@ static BOOL diagSetup(BOOL isolationEnabled) {
     return YES;
 }
 
+// 掛上只記錄、不改寫任何參數的 hook。
+// 凡是「不安裝隔離 hook 就直接返回」的路徑都必須呼叫，否則該情境下 guest app
+// 的鑰匙圈操作完全觀察不到——而那些正是最需要被觀察的情境。
+static void installDiagOnlyHooks(void) {
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemAdd, diag_SecItemAdd, nil);
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemCopyMatching, diag_SecItemCopyMatching, nil);
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemUpdate, diag_SecItemUpdate, nil);
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemDelete, diag_SecItemDelete, nil);
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateRandomKey, diag_SecKeyCreateRandomKey, nil);
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateWithData, diag_SecKeyCreateWithData, nil);
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyGeneratePair, diag_SecKeyGeneratePair, nil);
+    diagWrite(@"已掛上純記錄 hook，以下為 guest app 實際的鑰匙圈操作");
+}
+
+// 探測各種 access group 的可用性，供判斷可行的替代方案。
+// 「不指定 access group」使用的是系統配給本程式的預設群組，理論上必定可用；
+// 若探測結果顯示連它都不可用，代表問題不在群組權限。
+static void probeAccessGroups(void) {
+    if(!gDiagEnabled) return;
+    NSDictionary* base = @{
+        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+        (__bridge id)kSecAttrAccount: @"LCProbeNonExistent",
+        (__bridge id)kSecAttrService: @"LCProbeNonExistent",
+        (__bridge id)kSecReturnData: @NO
+    };
+    OSStatus s = SecItemCopyMatching((__bridge CFDictionaryRef)base, NULL);
+    diagWrite([NSString stringWithFormat:@"探測 不指定accessGroup -> %d %@（%@）",
+               (int)s, diagStatusName(s),
+               s == -34018 ? @"不可用" : @"可用"]);
+
+    NSString* team = [LCSharedUtils teamIdentifier];
+    NSArray* candidates = @[
+        [NSString stringWithFormat:@"%@.com.tyu.cc886751.shared", team],
+        [NSString stringWithFormat:@"%@.com.tyu.cc886751.shared.1", team],
+        [NSString stringWithFormat:@"%@.com.tyu.cc886751", team],
+        [NSString stringWithFormat:@"%@.com.tyu.cc886751.LiveProcess", team],
+    ];
+    for(NSString* g in candidates) {
+        NSMutableDictionary* q = base.mutableCopy;
+        q[(__bridge id)kSecAttrAccessGroup] = g;
+        OSStatus st = SecItemCopyMatching((__bridge CFDictionaryRef)q, NULL);
+        diagWrite([NSString stringWithFormat:@"探測 %@ -> %d %@（%@）",
+                   g, (int)st, diagStatusName(st),
+                   st == -34018 ? @"不可用" : @"可用"]);
+    }
+}
+
 void SecItemGuestHooksInit(void)  {
     // keychain 隔離會把 guest app 的金鑰操作（含 SecKeyCreateRandomKey /
     // SecKeyGeneratePair）重導向到容器專屬的 access group。但 Secure Enclave
@@ -372,13 +419,8 @@ void SecItemGuestHooksInit(void)  {
         // 隔離關閉時原本完全不掛 hook。若使用者開了診斷，仍要掛上純記錄版本，
         // 否則「關閉隔離後為何還是失敗」這個情境永遠觀察不到。
         if(diagSetup(NO)) {
-            litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemAdd, diag_SecItemAdd, nil);
-            litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemCopyMatching, diag_SecItemCopyMatching, nil);
-            litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemUpdate, diag_SecItemUpdate, nil);
-            litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemDelete, diag_SecItemDelete, nil);
-            litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateRandomKey, diag_SecKeyCreateRandomKey, nil);
-            litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateWithData, diag_SecKeyCreateWithData, nil);
-            litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyGeneratePair, diag_SecKeyGeneratePair, nil);
+            probeAccessGroups();
+            installDiagOnlyHooks();
         }
         return;
     }
@@ -405,13 +447,20 @@ void SecItemGuestHooksInit(void)  {
     OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)query, NULL);
     if(status == errSecMissingEntitlement) {
         NSLog(@"[LC] failed to access keychain access group %@", accessGroup);
+        // 此處原本直接返回、不安裝任何 hook。實測顯示這正是最常走到的路徑
+        // （免費開發者帳號簽名時取不到自訂的 keychain access group），
+        // 因此同樣要掛上純記錄的 hook，才看得到 guest app 實際的操作與回傳碼。
         if(diagSetup(YES)) {
-            diagWrite(@"!!! 容器專屬 access group 不可用（errSecMissingEntitlement），keychain hook 全數未安裝");
+            diagWrite(@"!!! 容器專屬 access group 不可用（errSecMissingEntitlement），隔離 hook 未安裝");
+            probeAccessGroups();
+            installDiagOnlyHooks();
         }
         return;
     }
 
-    diagSetup(YES);
+    if(diagSetup(YES)) {
+        probeAccessGroups();
+    }
 
     litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemAdd, new_SecItemAdd, nil);
     litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemCopyMatching, new_SecItemCopyMatching, nil);
