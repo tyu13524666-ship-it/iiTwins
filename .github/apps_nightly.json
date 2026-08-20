@@ -1,30 +1,30 @@
 {
-  "name": "cc886751 (nightly)",
+  "name": "iiTwins (nightly)",
   "identifier": "com.tyu.cc886751.source.nightly",
-  "website": "https://github.com/tyu13524666-ship-it/cc886751",
-  "subtitle": "cc886751 (nightly) 的安裝來源",
-  "description": "cc886751 (nightly)：在 iOS 上執行 App，不需實際安裝。",
+  "website": "https://github.com/tyu13524666-ship-it/iiTwins",
+  "subtitle": "iiTwins (nightly) 的安裝來源",
+  "description": "iiTwins (nightly)：在 iOS 上執行 App，不需實際安裝。",
   "tintColor": "#0784FC",
-  "iconURL": "https://raw.githubusercontent.com/tyu13524666-ship-it/cc886751/main/screenshots/AppIcon1024.png",
-  "headerURL": "https://raw.githubusercontent.com/tyu13524666-ship-it/cc886751/main/screenshots/header.png",
+  "iconURL": "https://raw.githubusercontent.com/tyu13524666-ship-it/iiTwins/main/screenshots/AppIcon1024.png",
+  "headerURL": "https://raw.githubusercontent.com/tyu13524666-ship-it/iiTwins/main/screenshots/header.png",
   "apps": [
     {
       "beta": false,
-      "name": "cc886751 (nightly)",
+      "name": "iiTwins (nightly)",
       "bundleIdentifier": "com.tyu.cc886751",
       "developerName": "tyu",
       "subtitle": "Run iOS apps without actually installing them!",
       "version": "3.4.50",
       "versionDate": "2025-04-26",
       "versionDescription": "This is a nightly release [created automatically with GitHub Actions workflow](https://github.com/LiveContainer/LiveContainer/actions/runs/14679205373/attempts/1).",
-      "downloadURL": "https://github.com/tyu13524666-ship-it/cc886751/releases/download/nightly/LiveContainer.ipa",
+      "downloadURL": "https://github.com/tyu13524666-ship-it/iiTwins/releases/download/nightly/LiveContainer.ipa",
       "localizedDescription": "Run iOS apps without actually installing them!",
-      "iconURL": "https://raw.githubusercontent.com/tyu13524666-ship-it/cc886751/main/screenshots/AppIcon1024.png",
+      "iconURL": "https://raw.githubusercontent.com/tyu13524666-ship-it/iiTwins/main/screenshots/AppIcon1024.png",
       "tintColor": "#0784FC",
       "category": "utilities",
       "size": 2785962,
       "screenshotURLs": [
-        "https://raw.githubusercontent.com/tyu13524666-ship-it/cc886751/main/screenshots/1.png"
+        "https://raw.githubusercontent.com/tyu13524666-ship-it/iiTwins/main/screenshots/1.png"
       ],
       "appPermissions": {
         "entitlements": [
@@ -83,7 +83,7 @@
           "version": "3.4.50",
           "date": "2025-04-26T07:00:00Z",
           "localizedDescription": "This is a nightly release [created automatically with GitHub Actions workflow](https://github.com/LiveContainer/LiveContainer/actions/runs/14679205373/attempts/1).",
-          "downloadURL": "https://github.com/tyu13524666-ship-it/cc886751/releases/download/nightly/LiveContainer+SideStore.ipa",
+          "downloadURL": "https://github.com/tyu13524666-ship-it/iiTwins/releases/download/nightly/LiveContainer+SideStore.ipa",
           "size": 2785962
         }
       ]

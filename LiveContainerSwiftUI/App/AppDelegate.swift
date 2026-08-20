@@ -7,6 +7,11 @@ import Intents
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? ) -> Bool {
         application.shortcutItems = nil
         UserDefaults.standard.removeObject(forKey: "LCNeedToAcquireJIT")
+
+        // 預設以多任務模式啟動：一般模式下 guest app 會完整接管畫面，
+        // 沒有任何返回入口，對新使用者體驗很差。
+        // register 只在使用者從未設定過時生效，手動關掉的人不會被覆蓋。
+        UserDefaults.standard.register(defaults: ["LCLaunchInMultitaskMode": true])
         
         NotificationCenter.default.addObserver(forName: UIApplication.willTerminateNotification, object: nil, queue: .main) { _ in
             // Fix launching app if user opens JIT waiting dialog and kills the app. Won't trigger normally.

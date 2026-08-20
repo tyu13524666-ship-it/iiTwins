@@ -274,32 +274,11 @@ struct LCSettingsView: View {
                     }
                 }
                 
-                Section {
-                    HStack {
-                        Image("GitHub")
-                        Button("LiveContainer/LiveContainer") {
-                            openGitHub()
-                        }
-                    }
-                    HStack {
-                        Image("Twitter")
-                        Button("khanhduytran0") {
-                            openTwitter()
-                        }
-                    }
-                    HStack {
-                        Image("GitHub")
-                        Button("Huge_Black") {
-                            openGitHub2()
-                        }
-                    }
-                } header: {
-                    Text("lc.settings.about".loc)
-                } footer: {
+                VStack(spacing: 6){
                     Text("lc.settings.warning".loc)
-                }
-                
-                VStack{
+                        .foregroundStyle(.gray)
+                        .font(.footnote)
+                        .multilineTextAlignment(.center)
                     Text(LCUtils.getVersionInfo())
                         .foregroundStyle(.gray)
                         .onTapGesture(count: 5) {
@@ -458,18 +437,6 @@ struct LCSettingsView: View {
         }
     }
     
-    func openGitHub() {
-        UIApplication.shared.open(URL(string: "https://github.com/LiveContainer/LiveContainer")!)
-    }
-    
-    func openGitHub2() {
-        UIApplication.shared.open(URL(string: "https://github.com/hugeBlack")!)
-    }
-    
-    func openTwitter() {
-        UIApplication.shared.open(URL(string: "https://twitter.com/khanhduytran0")!)
-    }
-
     func clearNotifications() {
         let notificationCenter = UNUserNotificationCenter.current()
         notificationCenter.removeAllDeliveredNotifications()
