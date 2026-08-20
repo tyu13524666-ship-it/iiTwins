@@ -89,6 +89,8 @@ static void kbPostSyntheticDismissal(UIWindow* window) {
 
 // 三個 hook 共用：高度確有變動時記錄並補送鍵盤事件。
 static void kbHandleHeightChange(UIWindow* window, NSString* via, CGFloat before, CGFloat after) {
+    // 雙重保險：即使掛載方式有誤而波及其他視圖，也只處理真正的 UIWindow
+    if(![window isKindOfClass:UIWindow.class]) return;
     if(fabs(before - after) < 1.0) return;
     kbLog(@"視窗高度變動 %.1f -> %.1f（來源 %@）", before, after, via);
     if(kbDisabled()) {
@@ -138,13 +140,47 @@ static void kbHandleHeightChange(UIWindow* window, NSString* via, CGFloat before
 
 @end
 
-void KeyboardRelayoutHookInit(void) {
-    // 視窗尺寸未必經由 setBounds: 變更，三條路徑一併掛上，由記錄判斷實際經過何者
-    swizzle(UIWindow.class, @selector(setBounds:), @selector(lcKB_setBounds:));
-    swizzle(UIWindow.class, @selector(setFrame:), @selector(lcKB_setFrame:));
-    swizzle(UIWindow.class, @selector(layoutSubviews), @selector(lcKB_layoutSubviews));
+// layoutSubviews、setFrame:、setBounds: 三者 UIWindow 均未自行實作，
+// class_getInstanceMethod 取得的是繼承自 UIView 的方法。若直接交換實作，
+// 等同替換 UIView 全體的行為，app 會在啟動階段崩潰。
+//
+// 因此先嘗試將替代實作以原名加到 UIWindow 自身：若成功，代表該類別原本
+// 沒有自己的實作，此時只需把父類別的實作登記到替代名稱下即可，UIView
+// 完全不受影響；若失敗，代表該類別確實有自己的實作，才進行交換。
+static void kbSafeSwizzle(Class cls, SEL originalSel, SEL replacementSel) {
+    Method original = class_getInstanceMethod(cls, originalSel);
+    Method replacement = class_getInstanceMethod(cls, replacementSel);
+    if(!original || !replacement) {
+        kbLog(@"  略過 %@：取不到方法", NSStringFromSelector(originalSel));
+        return;
+    }
 
-    kbLog(@"===== 鍵盤重排監看已掛上（停用=%d）=====", (int)kbDisabled());
+    if(class_addMethod(cls, originalSel,
+                       method_getImplementation(replacement),
+                       method_getTypeEncoding(replacement))) {
+        class_replaceMethod(cls, replacementSel,
+                            method_getImplementation(original),
+                            method_getTypeEncoding(original));
+        kbLog(@"  已掛上 %@（原先繼承自父類別，未影響父類別）", NSStringFromSelector(originalSel));
+    } else {
+        method_exchangeImplementations(original, replacement);
+        kbLog(@"  已掛上 %@（該類別自有實作，直接交換）", NSStringFromSelector(originalSel));
+    }
+}
+
+void KeyboardRelayoutHookInit(void) {
+    // 掛載本身即受開關控制。先前僅在處理階段檢查開關，一旦掛載方式有誤便
+    // 無從關閉，使用者只能眼看 app 反覆崩潰。
+    if(kbDisabled()) {
+        kbLog(@"===== 使用者已停用，未掛上任何監看 =====");
+        return;
+    }
+
+    kbLog(@"===== 鍵盤重排監看開始掛載 =====");
+    // 視窗尺寸未必經由 setBounds: 變更，三條路徑一併掛上，由記錄判斷實際經過何者
+    kbSafeSwizzle(UIWindow.class, @selector(setBounds:), @selector(lcKB_setBounds:));
+    kbSafeSwizzle(UIWindow.class, @selector(setFrame:), @selector(lcKB_setFrame:));
+    kbSafeSwizzle(UIWindow.class, @selector(layoutSubviews), @selector(lcKB_layoutSubviews));
 
     // 延後再記一次，確認 app 啟動後的視窗狀態
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
