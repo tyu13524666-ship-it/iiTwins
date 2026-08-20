@@ -142,6 +142,8 @@ class AppInfoProvider {
     public struct Constants {
         // MARK: - Layout & Sizing
         static let defaultDockWidth: CGFloat = 70.0
+        /// 放開手指時仍視為「點擊」的最大位移；超過即認定為拖曳 Dock
+        static let tapMaxMovement: CGFloat = 10.0
         static let minAdaptiveDockWidth: CGFloat = 50.0
         static let minAdaptiveIconSize: CGFloat = 10.0
         static let maxIconSize: CGFloat = 100.0
@@ -1127,8 +1129,10 @@ struct AppIconView: View {
             onPress: { 
                 isPressed = true
             },
-            onRelease: { location in 
+            onRelease: { location in
                 isPressed = false
+                // location 為 nil 代表這是拖曳 Dock 的動作，不應開啟 App
+                guard let location else { return }
                 let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
                 impactFeedback.impactOccurred()
                 let _ = dockManager.bringMultitaskViewToFront(uuid: app.appUUID, from: location)
@@ -1170,7 +1174,10 @@ struct AppIconView: View {
 
 // MARK: - Press Gesture Helper
 extension View {
-    func onPressGesture(onPress: @escaping () -> Void, onRelease: @escaping (_ location: CGPoint) -> Void) -> some View {
+    /// 放開時若手指幾乎沒有移動才視為點擊，location 才會有值。
+    /// 移動超過容許範圍代表使用者是在拖曳 Dock 本身，此時 location 為 nil，
+    /// 呼叫端只需還原按壓狀態，不應開啟該 App。
+    func onPressGesture(onPress: @escaping () -> Void, onRelease: @escaping (_ location: CGPoint?) -> Void) -> some View {
         self.simultaneousGesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .global)
                 .onChanged { value in
@@ -1179,7 +1186,8 @@ extension View {
                     }
                 }
                 .onEnded { value in
-                    onRelease(value.startLocation)
+                    let moved = hypot(value.translation.width, value.translation.height)
+                    onRelease(moved <= MultitaskDockManager.Constants.tapMaxMovement ? value.startLocation : nil)
                 }
         )
     }

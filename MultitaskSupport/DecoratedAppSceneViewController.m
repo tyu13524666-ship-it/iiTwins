@@ -283,8 +283,19 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
     }
 }
 
+// 視窗收起時鍵盤必須跟著收，否則容器內的輸入框仍持有輸入焦點，鍵盤會留在
+// 畫面上蓋住其他內容。輸入框位於另一個 scene，因此以全域方式要求目前的
+// 第一響應者放棄焦點。
+- (void)lcDismissKeyboardIfPresented {
+    if(self.keyboardInset <= 0) return;
+    LCKeyboardDiagLog(self.dataUUID, @"視窗收起，主動收回鍵盤（原 inset %.1f）", self.keyboardInset);
+    [UIApplication.sharedApplication sendAction:@selector(resignFirstResponder) to:nil from:nil forEvent:nil];
+    self.keyboardInset = 0;
+}
+
 - (void)minimizeWindow {
     if (self.view.hidden) return;
+    [self lcDismissKeyboardIfPresented];
     [UIView animateWithDuration:0.3 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
         self.view.alpha = 0;
         self.view.transform = CGAffineTransformMakeScale(0.1, 0.1);
@@ -297,6 +308,7 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
 }
 
 - (void)minimizeWindowPiP {
+    [self lcDismissKeyboardIfPresented];
     [UIView animateWithDuration:0.3 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
         self.view.alpha = 0;
     } completion:^(BOOL finished) {
@@ -639,11 +651,28 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
 
     self.keyboardInset = overlap;
     __weak typeof(self) weakSelf = self;
-    self.appSceneVC.shouldSkipDebounceOnce = YES;
-    [self.appSceneVC updateSettingsWithBlock:^(UIMutableApplicationSceneSettings *settings) {
-        [weakSelf updateMaximizedFrameWithSettings:settings];
-    }];
-    LCKeyboardDiagLog(self.dataUUID, @"  已將視窗底部上移 %.1f", overlap);
+
+    // 與鍵盤採用相同的動畫時間與曲線，讓視窗和鍵盤同步移動。若各動各的，
+    // 容器內的 app 會在舊尺寸下先完成一次排版，畫面出現大片空白，要再碰一下
+    // 才會重繪。
+    NSTimeInterval duration = [note.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
+    NSInteger curve = [note.userInfo[UIKeyboardAnimationCurveUserInfoKey] integerValue];
+    if(duration <= 0) duration = 0.25;
+
+    [UIView animateWithDuration:duration
+                          delay:0
+                        options:(UIViewAnimationOptions)(curve << 16)
+                     animations:^{
+        typeof(self) strongSelf = weakSelf;
+        if(!strongSelf) return;
+        strongSelf.appSceneVC.shouldSkipDebounceOnce = YES;
+        [strongSelf.appSceneVC updateSettingsWithBlock:^(UIMutableApplicationSceneSettings *settings) {
+            [strongSelf updateMaximizedFrameWithSettings:settings];
+        }];
+        [strongSelf.view layoutIfNeeded];
+    } completion:nil];
+
+    LCKeyboardDiagLog(self.dataUUID, @"  已將視窗底部上移 %.1f（動畫 %.2fs 曲線 %ld）", overlap, duration, (long)curve);
 }
 
 - (void)dealloc {
