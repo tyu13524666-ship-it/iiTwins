@@ -23,18 +23,9 @@ static void UIKitGuestHooksInit() {
     swizzle(UIScene.class, @selector(openURL:options:completionHandler:), @selector(hook_openURL:options:completionHandler:));
 
     // 視窗高度變動時補送鍵盤事件，促使 app 重新排版（詳見 UIWindow(hook) 的說明）。
-    // 僅在多工模式下需要，且限於本程式會主動縮短視窗的情形。
-    if(NSUserDefaults.isLiveProcess &&
-       ![NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableKeyboardAvoidance"] &&
-       ![NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableGuestRelayout"]) {
-        swizzle(UIWindow.class, @selector(setBounds:), @selector(hook_setBounds:));
-        LCGuestDiagLog(@"===== 已掛上視窗尺寸監看 =====");
-    } else {
-        LCGuestDiagLog(@"===== 未掛上視窗尺寸監看：isLiveProcess=%d 鍵盤避讓停用=%d 重排停用=%d =====",
-                       (int)NSUserDefaults.isLiveProcess,
-                       (int)[NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableKeyboardAvoidance"],
-                       (int)[NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableGuestRelayout"]);
-    }
+    // 此處為 dylib 載入當下，各項設定與容器路徑未必就緒，因此一律掛上，是否
+    // 實際處理留待 hook 執行時再判斷（該時機 app 已在執行，取值可靠）。
+    swizzle(UIWindow.class, @selector(setBounds:), @selector(hook_setBounds:));
     NSInteger LCOrientationLockDirection = [NSUserDefaults.guestAppInfo[@"LCOrientationLock"] integerValue];
     if(LCOrientationLockDirection != 0 && [UIDevice.currentDevice userInterfaceIdiom] == UIUserInterfaceIdiomPhone) {
         switch (LCOrientationLockDirection) {
@@ -781,8 +772,9 @@ static void LCGuestDiagLog(NSString* format, ...) {
     NSString* message = [[NSString alloc] initWithFormat:format arguments:args];
     va_end(args);
 
+    // 目錄不存在就建立，否則在容器尚未備妥時會連失敗訊息都留不下來
     NSString* dir = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents"];
-    if(![NSFileManager.defaultManager fileExistsAtPath:dir]) return;
+    [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
 
     static NSDateFormatter* fmt = nil;
     static dispatch_once_t once;
@@ -838,7 +830,17 @@ static void LCPostSyntheticKeyboardDismissal(UIWindow* window) {
     [self hook_setBounds:bounds];
     // 只在高度確實改變時處理，避免一般排版流程反覆觸發
     if(fabs(previous.height - bounds.size.height) < 1.0) return;
-    LCGuestDiagLog(@"視窗高度變動 %.1f -> %.1f", previous.height, bounds.size.height);
+
+    LCGuestDiagLog(@"視窗高度變動 %.1f -> %.1f（isLiveProcess=%d 鍵盤避讓停用=%d 重排停用=%d）",
+                   previous.height, bounds.size.height,
+                   (int)NSUserDefaults.isLiveProcess,
+                   (int)[NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableKeyboardAvoidance"],
+                   (int)[NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableGuestRelayout"]);
+
+    // 條件於此處判斷：app 已在執行，設定與容器路徑均已就緒
+    if(!NSUserDefaults.isLiveProcess) return;
+    if([NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableKeyboardAvoidance"]) return;
+    if([NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableGuestRelayout"]) return;
 
     // 排到下一輪執行，讓 UIKit 先完成自身對新尺寸的處理
     dispatch_async(dispatch_get_main_queue(), ^{
