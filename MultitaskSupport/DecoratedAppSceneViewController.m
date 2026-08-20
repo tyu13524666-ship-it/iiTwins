@@ -15,7 +15,40 @@
 @property(nonatomic) CGRect originalFrame;
 @property(nonatomic) UIBarButtonItem *maximizeButton;
 @property(nonatomic) bool isAppTerminationRequested;
+// 鍵盤遮住視窗底部的高度。虛擬視窗的座標原點與螢幕不一致，容器內的 app
+// 依系統鍵盤通知自行避讓時會算錯位置，導致輸入列被推到可視範圍之外。
+@property(nonatomic) CGFloat keyboardInset;
 @end
+
+#pragma mark - 鍵盤診斷記錄
+
+// 寫入該容器的 Documents，匯出容器即可取得。與鑰匙圈診斷共用同一個開關。
+static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
+    if(dataUUID.length == 0) return;
+    if(![NSUserDefaults.lcSharedDefaults boolForKey:@"LCKeychainDiagnostics"]) return;
+
+    va_list args;
+    va_start(args, format);
+    NSString* message = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
+
+    NSString* docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    if(!docs) return;
+    NSString* dir = [NSString stringWithFormat:@"%@/Data/Application/%@/Documents", docs, dataUUID];
+    if(![NSFileManager.defaultManager fileExistsAtPath:dir]) return;
+
+    static NSDateFormatter* fmt = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        fmt = [[NSDateFormatter alloc] init];
+        fmt.dateFormat = @"HH:mm:ss.SSS";
+    });
+    NSString* line = [NSString stringWithFormat:@"%@ %@\n", [fmt stringFromDate:[NSDate date]], message];
+    FILE* f = fopen([dir stringByAppendingPathComponent:@"LCKeyboardDiag.log"].UTF8String, "a");
+    if(!f) return;
+    fputs(line.UTF8String, f);
+    fclose(f);
+}
 
 @implementation DecoratedAppSceneViewController
 - (instancetype)initWindowName:(NSString*)windowName bundleId:(NSString*)bundleId dataUUID:(NSString*)dataUUID rootVC:(UIViewController*)rootVC {
@@ -33,6 +66,12 @@
     _appSceneVC = [[AppSceneViewController alloc] initWithBundleId:bundleId dataUUID:dataUUID delegate:self];
     self.title = windowName;
     [self setupDecoratedView];
+
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(lcKeyboardFrameWillChange:)
+                                               name:UIKeyboardWillChangeFrameNotification
+                                             object:nil];
+    LCKeyboardDiagLog(dataUUID, @"===== 視窗建立 %@ 最大化=%d =====", windowName, _isMaximized);
     
     [MultitaskDockManager.shared addRunningApp:windowName appUUID:dataUUID view:self.view];
     
@@ -559,7 +598,56 @@
 
 - (void)updateMaximizedFrameWithSettings:(UIMutableApplicationSceneSettings *)settings {
     CGRect maxFrame = UIEdgeInsetsInsetRect(self.view.window.frame, [self updateMaximizedSafeAreaWithSettings:settings]);
+    // 讓視窗底部停在鍵盤上方，容器內的 app 才會把輸入列排在看得見的位置
+    if(self.keyboardInset > 0) {
+        maxFrame.size.height -= self.keyboardInset;
+        if(maxFrame.size.height < 120) maxFrame.size.height = 120;
+    }
     self.view.frame = maxFrame;
+}
+
+// 系統鍵盤的位置以螢幕座標回報，而虛擬視窗有自己的原點與縮放，容器內的 app
+// 據此自行避讓時會算錯，輸入列因而被推出可視範圍。這裡由視窗端量出鍵盤實際
+// 遮住的高度，直接把視窗底部縮到鍵盤上方，讓 app 看到的可視範圍就是正確的。
+- (void)lcKeyboardFrameWillChange:(NSNotification*)note {
+    UIWindow* window = self.view.window;
+    if(!window) return;
+
+    CGRect kbEnd = [note.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+    CGRect kbInWindow = [window convertRect:kbEnd fromWindow:nil];
+    CGRect frameInWindow = [self.view.superview convertRect:self.view.frame toView:window];
+
+    CGFloat overlap = CGRectGetMaxY(frameInWindow) - CGRectGetMinY(kbInWindow);
+    if(overlap < 0 || CGRectIsEmpty(kbInWindow)) overlap = 0;
+
+    LCKeyboardDiagLog(self.dataUUID,
+                      @"鍵盤 螢幕座標=%@ 視窗座標=%@ | 本視窗=%@ | 畫面高=%.0f 重疊=%.1f 原inset=%.1f 最大化=%d 縮放=%.2f",
+                      NSStringFromCGRect(kbEnd), NSStringFromCGRect(kbInWindow),
+                      NSStringFromCGRect(frameInWindow), window.bounds.size.height,
+                      overlap, self.keyboardInset, self.isMaximized, self.scaleRatio);
+
+    if(fabs(overlap - self.keyboardInset) < 1.0) return;
+    if([NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableKeyboardAvoidance"]) {
+        LCKeyboardDiagLog(self.dataUUID, @"  （鍵盤避讓已由使用者停用，不調整視窗）");
+        return;
+    }
+    if(!self.isMaximized) {
+        // 非最大化時視窗多半不會與鍵盤重疊，且位置由使用者自行擺放，不介入
+        LCKeyboardDiagLog(self.dataUUID, @"  （非最大化，不調整視窗）");
+        return;
+    }
+
+    self.keyboardInset = overlap;
+    __weak typeof(self) weakSelf = self;
+    self.appSceneVC.shouldSkipDebounceOnce = YES;
+    [self.appSceneVC updateSettingsWithBlock:^(UIMutableApplicationSceneSettings *settings) {
+        [weakSelf updateMaximizedFrameWithSettings:settings];
+    }];
+    LCKeyboardDiagLog(self.dataUUID, @"  已將視窗底部上移 %.1f", overlap);
+}
+
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self name:UIKeyboardWillChangeFrameNotification object:nil];
 }
 
 - (void)updateWindowedFrameWithSettings:(UIMutableApplicationSceneSettings *)settings {

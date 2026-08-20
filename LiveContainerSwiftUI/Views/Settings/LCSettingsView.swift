@@ -239,9 +239,9 @@ struct LCSettingsView: View {
                         .font(.footnote)
                         .foregroundStyle(.gray)
                     Toggle(isOn: $keychainDiagnostics) {
-                        Text("記錄鑰匙圈診斷日誌")
+                        Text("記錄診斷日誌")
                     }
-                    Text("記錄容器內 App 每次存取鑰匙圈與金鑰的結果，用來查明加密功能失效的原因。日誌只含操作名稱與錯誤碼，不含密碼或金鑰內容，存放於容器的 Documents/LCKeychainDiag.log。平時請保持關閉，會拖慢速度並持續佔用空間。")
+                    Text("記錄容器內 App 存取鑰匙圈與金鑰的結果，以及鍵盤位置的計算過程，用來查明加密或版面異常的原因。日誌只含操作名稱、錯誤碼與尺寸數值，不含密碼或金鑰內容，存放於容器的 Documents 之下（LCKeychainDiag.log 與 LCKeyboardDiag.log）。平時請保持關閉，會拖慢速度並持續佔用空間。")
                         .font(.footnote)
                         .foregroundStyle(.gray)
                     Toggle(isOn: $frameShortIcon) {
