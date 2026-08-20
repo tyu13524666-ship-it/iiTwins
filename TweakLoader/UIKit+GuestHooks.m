@@ -1,4 +1,5 @@
 @import UIKit;
+#import <objc/runtime.h>
 #import "LCSharedUtils.h"
 #import "UIKitPrivate.h"
 #import "../LiveContainer/utils.h"
@@ -25,7 +26,24 @@ static void UIKitGuestHooksInit() {
     // 視窗高度變動時補送鍵盤事件，促使 app 重新排版（詳見 UIWindow(hook) 的說明）。
     // 此處為 dylib 載入當下，各項設定與容器路徑未必就緒，因此一律掛上，是否
     // 實際處理留待 hook 執行時再判斷（該時機 app 已在執行，取值可靠）。
+    //
+    // 視窗尺寸未必經由 setBounds: 變更，實測該方法從未被呼叫。一併掛上 setFrame:
+    // 與 layoutSubviews，由記錄判斷實際會經過哪一條路徑。
     swizzle(UIWindow.class, @selector(setBounds:), @selector(hook_setBounds:));
+    swizzle(UIWindow.class, @selector(setFrame:), @selector(hook_setFrame:));
+    swizzle(UIWindow.class, @selector(layoutSubviews), @selector(hook_layoutSubviews));
+
+    // 延後記錄，確認注入層確實載入。建構函式執行時 HOME 未必已指向容器，
+    // 此刻寫入的檔案不一定落在匯出得到的位置。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        LCGuestDiagLog(@"===== 注入層已載入，監看已掛上（isLiveProcess=%d 鍵盤避讓停用=%d 重排停用=%d）=====",
+                       (int)NSUserDefaults.isLiveProcess,
+                       (int)[NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableKeyboardAvoidance"],
+                       (int)[NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableGuestRelayout"]);
+        for(UIWindow* w in UIApplication.sharedApplication.windows) {
+            LCGuestDiagLog(@"  現有視窗 %@ bounds=%@", NSStringFromClass(w.class), NSStringFromCGRect(w.bounds));
+        }
+    });
     NSInteger LCOrientationLockDirection = [NSUserDefaults.guestAppInfo[@"LCOrientationLock"] integerValue];
     if(LCOrientationLockDirection != 0 && [UIDevice.currentDevice userInterfaceIdiom] == UIUserInterfaceIdiomPhone) {
         switch (LCOrientationLockDirection) {
@@ -825,14 +843,12 @@ static void LCPostSyntheticKeyboardDismissal(UIWindow* window) {
     [self hook_setAutorotates:YES forceUpdateInterfaceOrientation:YES];
 }
 
-- (void)hook_setBounds:(CGRect)bounds {
-    CGSize previous = self.bounds.size;
-    [self hook_setBounds:bounds];
-    // 只在高度確實改變時處理，避免一般排版流程反覆觸發
-    if(fabs(previous.height - bounds.size.height) < 1.0) return;
+// 三個 hook 共用：高度確有變動時記錄並補送鍵盤事件。
+static void LCHandleWindowHeightChange(UIWindow* window, NSString* via, CGFloat before, CGFloat after) {
+    if(fabs(before - after) < 1.0) return;
 
-    LCGuestDiagLog(@"視窗高度變動 %.1f -> %.1f（isLiveProcess=%d 鍵盤避讓停用=%d 重排停用=%d）",
-                   previous.height, bounds.size.height,
+    LCGuestDiagLog(@"視窗高度變動 %.1f -> %.1f（來源 %@，isLiveProcess=%d 鍵盤避讓停用=%d 重排停用=%d）",
+                   before, after, via,
                    (int)NSUserDefaults.isLiveProcess,
                    (int)[NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableKeyboardAvoidance"],
                    (int)[NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableGuestRelayout"]);
@@ -844,8 +860,37 @@ static void LCPostSyntheticKeyboardDismissal(UIWindow* window) {
 
     // 排到下一輪執行，讓 UIKit 先完成自身對新尺寸的處理
     dispatch_async(dispatch_get_main_queue(), ^{
-        LCPostSyntheticKeyboardDismissal(self);
+        LCPostSyntheticKeyboardDismissal(window);
     });
+}
+
+- (void)hook_setBounds:(CGRect)bounds {
+    CGFloat previous = self.bounds.size.height;
+    [self hook_setBounds:bounds];
+    LCHandleWindowHeightChange(self, @"setBounds", previous, bounds.size.height);
+}
+
+- (void)hook_setFrame:(CGRect)frame {
+    CGFloat previous = self.bounds.size.height;
+    [self hook_setFrame:frame];
+    LCHandleWindowHeightChange(self, @"setFrame", previous, frame.size.height);
+}
+
+- (void)hook_layoutSubviews {
+    // 以關聯物件記錄前次高度：layoutSubviews 呼叫頻繁，只在高度真的變動時處理
+    static const void* kLastHeightKey = &kLastHeightKey;
+    NSNumber* stored = objc_getAssociatedObject(self, kLastHeightKey);
+    CGFloat previous = stored ? stored.doubleValue : self.bounds.size.height;
+
+    [self hook_layoutSubviews];
+
+    CGFloat current = self.bounds.size.height;
+    if(!stored || fabs(previous - current) >= 1.0) {
+        objc_setAssociatedObject(self, kLastHeightKey, @(current), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if(stored) {
+        LCHandleWindowHeightChange(self, @"layoutSubviews", previous, current);
+    }
 }
 
 - (void)hook_makeKeyAndVisible {
