@@ -629,14 +629,17 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
     CGRect kbInWindow = [window convertRect:kbEnd fromWindow:nil];
     CGRect frameInWindow = [self.view.superview convertRect:self.view.frame toView:window];
 
-    CGFloat overlap = CGRectGetMaxY(frameInWindow) - CGRectGetMinY(kbInWindow);
+    // 視窗此刻可能已因先前的調整而縮短，若直接以現況計算，會得出「已無重疊」
+    // 而把調整撤銷，接著鍵盤通知再度觸發、又重新縮短，視窗於兩個高度之間反覆
+    // 跳動，容器內的 app 排版隨之錯亂。因此先還原成未調整前的底部再計算。
+    CGFloat originalBottom = CGRectGetMaxY(frameInWindow) + self.keyboardInset;
+    CGFloat overlap = originalBottom - CGRectGetMinY(kbInWindow);
     if(overlap < 0 || CGRectIsEmpty(kbInWindow)) overlap = 0;
 
     LCKeyboardDiagLog(self.dataUUID,
-                      @"鍵盤 螢幕座標=%@ 視窗座標=%@ | 本視窗=%@ | 畫面高=%.0f 重疊=%.1f 原inset=%.1f 最大化=%d 縮放=%.2f",
-                      NSStringFromCGRect(kbEnd), NSStringFromCGRect(kbInWindow),
-                      NSStringFromCGRect(frameInWindow), window.bounds.size.height,
-                      overlap, self.keyboardInset, self.isMaximized, self.scaleRatio);
+                      @"鍵盤 螢幕=%@ | 本視窗=%@ 還原後底部=%.1f | 重疊=%.1f 原inset=%.1f 最大化=%d 縮放=%.2f",
+                      NSStringFromCGRect(kbEnd), NSStringFromCGRect(frameInWindow),
+                      originalBottom, overlap, self.keyboardInset, self.isMaximized, self.scaleRatio);
 
     if(fabs(overlap - self.keyboardInset) < 1.0) return;
     if([NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableKeyboardAvoidance"]) {
