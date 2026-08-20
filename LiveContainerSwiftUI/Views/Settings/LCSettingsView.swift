@@ -208,6 +208,12 @@ struct LCSettingsView: View {
                     Text("lc.settings.dynamicColors.desc".loc)
                 }
                 Section{
+                    Toggle(isOn: $enableKeychainIsolation) {
+                        Text("啟用鑰匙圈隔離")
+                    }
+                    Text("讓同一個 App 的不同容器各自使用獨立的鑰匙圈。關閉時容器會直接使用本程式的鑰匙圈。LINE 等重度使用加密的 App 在開啟隔離時可能出現解密失敗，建議保持關閉。")
+                        .font(.footnote)
+                        .foregroundStyle(.gray)
                     Toggle(isOn: $frameShortIcon) {
                         Text("lc.settings.FrameIcon".loc)
                     }
