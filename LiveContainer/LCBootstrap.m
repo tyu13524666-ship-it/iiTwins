@@ -519,6 +519,8 @@ static NSString* invokeAppMain(NSString *selectedApp, NSString *selectedContaine
     NUDGuestHooksInit();
     // 免費憑證沒有 Siri entitlement，先擋掉相關呼叫避免 guest app 被系統終止
     SiriBypassHookInit();
+    // 錄音失效的診斷記錄，僅在使用者開啟診斷時生效
+    AudioDiagHookInit();
     if(!isSideStore) {
         SecItemGuestHooksInit();
         NSFMGuestHooksInit();
