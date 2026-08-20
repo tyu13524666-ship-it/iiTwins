@@ -48,6 +48,8 @@ struct LCSettingsView: View {
     
     @AppStorage("LCFrameShortcutIcons") var frameShortIcon = false
     @AppStorage("LCDisableKeychainIsolation") var disableKeychainIsolation = false
+    @AppStorage("LCIsolateSecKeys") var isolateSecKeys = false
+    @AppStorage("LCKeychainDiagnostics") var keychainDiagnostics = false
     @AppStorage("LCSwitchAppWithoutAsking") var silentSwitchApp = false
     @AppStorage("LCOpenWebPageWithoutAsking") var silentOpenWebPage = false
     @AppStorage("LCDontSignApp", store: LCUtils.appGroupUserDefault) var dontSignApp = false
@@ -213,6 +215,19 @@ struct LCSettingsView: View {
                         Text("停用鑰匙圈隔離")
                     }
                     Text("預設會讓同一個 App 的不同容器各自使用獨立的鑰匙圈，以便分別登入不同帳號。若 App 出現解密失敗或登入狀態異常，可開啟此選項改用本程式的鑰匙圈，但屆時多個容器將共用同一份登入資料。")
+                        .font(.footnote)
+                        .foregroundStyle(.gray)
+                    Toggle(isOn: $isolateSecKeys) {
+                        Text("連加密金鑰一併隔離")
+                    }
+                    .disabled(disableKeychainIsolation)
+                    Text("加密金鑰（Secure Enclave 產生的那類）預設不隔離，因為它們會綁定產生當下的環境，改動後就無法再取用。除非同一個 App 的多個容器出現金鑰互相干擾，否則維持關閉。")
+                        .font(.footnote)
+                        .foregroundStyle(.gray)
+                    Toggle(isOn: $keychainDiagnostics) {
+                        Text("記錄鑰匙圈診斷日誌")
+                    }
+                    Text("記錄容器內 App 每次存取鑰匙圈與金鑰的結果，用來查明加密功能失效的原因。日誌只含操作名稱與錯誤碼，不含密碼或金鑰內容，存放於容器的 Documents/LCKeychainDiag.log。平時請保持關閉，會拖慢速度並持續佔用空間。")
                         .font(.footnote)
                         .foregroundStyle(.gray)
                     Toggle(isOn: $frameShortIcon) {
