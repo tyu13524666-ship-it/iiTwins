@@ -47,6 +47,7 @@ struct LCSettingsView: View {
     @StateObject private var certificateImportPasswordAlert = InputHelper()
     
     @AppStorage("LCFrameShortcutIcons") var frameShortIcon = false
+    @AppStorage("LCDisableKeychainIsolation") var disableKeychainIsolation = false
     @AppStorage("LCSwitchAppWithoutAsking") var silentSwitchApp = false
     @AppStorage("LCOpenWebPageWithoutAsking") var silentOpenWebPage = false
     @AppStorage("LCDontSignApp", store: LCUtils.appGroupUserDefault) var dontSignApp = false
@@ -208,10 +209,10 @@ struct LCSettingsView: View {
                     Text("lc.settings.dynamicColors.desc".loc)
                 }
                 Section{
-                    Toggle(isOn: $enableKeychainIsolation) {
-                        Text("啟用鑰匙圈隔離")
+                    Toggle(isOn: $disableKeychainIsolation) {
+                        Text("停用鑰匙圈隔離")
                     }
-                    Text("讓同一個 App 的不同容器各自使用獨立的鑰匙圈。關閉時容器會直接使用本程式的鑰匙圈。LINE 等重度使用加密的 App 在開啟隔離時可能出現解密失敗，建議保持關閉。")
+                    Text("預設會讓同一個 App 的不同容器各自使用獨立的鑰匙圈，以便分別登入不同帳號。若 App 出現解密失敗或登入狀態異常，可開啟此選項改用本程式的鑰匙圈，但屆時多個容器將共用同一份登入資料。")
                         .font(.footnote)
                         .foregroundStyle(.gray)
                     Toggle(isOn: $frameShortIcon) {
