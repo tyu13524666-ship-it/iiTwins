@@ -21,7 +21,7 @@ private struct LaunchPriorityLC: Identifiable, Hashable {
 }
 
 private let knownLiveContainers = [
-    LaunchPriorityLC(scheme: "livecontainer", displayName: "iiTwins"),
+    LaunchPriorityLC(scheme: "iitwins", displayName: "iiTwins"),
     LaunchPriorityLC(scheme: "iitwins-2", displayName: "iiTwins-2"),
     LaunchPriorityLC(scheme: "iitwins-3", displayName: "iiTwins-3")
 ]
@@ -151,7 +151,7 @@ struct LCMultiLCManagementView : View, InstallAnotherLCButtonDelegate {
     }
     
     private func isInstalled(scheme: String) -> Bool {
-        if scheme == "livecontainer" {
+        if scheme == "iitwins" {
             return true
         }
         guard let url = URL(string: "\(scheme)://") else {

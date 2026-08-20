@@ -44,7 +44,7 @@
 			<string>com.tyu.cc886751.urlscheme</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>livecontainer</string>
+				<string>iitwins</string>
 			</array>
 		</dict>
 	</array>
@@ -72,9 +72,9 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>sidestore</string>
-		<string>livecontainer</string>
-		<string>livecontainer2</string>
-		<string>livecontainer3</string>
+		<string>iitwins</string>
+		<string>iitwins2</string>
+		<string>iitwins3</string>
 	</array>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>

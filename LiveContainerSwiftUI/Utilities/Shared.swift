@@ -93,7 +93,7 @@ class SharedModel: ObservableObject {
     public static let keychainAccessGroupCount = 128
     
     func updateMultiLCStatus() {
-        if LCUtils.appUrlScheme()?.lowercased() != "livecontainer" {
+        if LCUtils.appUrlScheme()?.lowercased() != "iitwins" {
             multiLCStatus = 2
         } else {
             multiLCStatus = 0

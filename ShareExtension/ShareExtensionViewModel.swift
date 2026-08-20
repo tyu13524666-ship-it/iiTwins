@@ -456,7 +456,7 @@ final class ShareExtensionViewModel: ObservableObject {
 
         do {
             try storeBookmark(for: fileURL)
-            guard var components = URLComponents(string: "livecontainer://install") else {
+            guard var components = URLComponents(string: "iitwins://install") else {
                 throw ShareExtensionError("Unable to build install URL.")
             }
             components.queryItems = [
@@ -492,14 +492,14 @@ final class ShareExtensionViewModel: ObservableObject {
     private func launchBuiltInSideStore(context: NSExtensionContext?) throws {
         let launchURLString = try preparePayloadForLaunch()
 
-        sharedDefaults?.set("livecontainer", forKey: "LCLaunchExtensionScheme")
+        sharedDefaults?.set("iitwins", forKey: "LCLaunchExtensionScheme")
         sharedDefaults?.set("builtinSideStore", forKey: "LCLaunchExtensionBundleID")
         if let launchURLString {
             sharedDefaults?.set(launchURLString, forKey: "LCLaunchExtensionLaunchURL")
         }
         sharedDefaults?.set(Date(), forKey: "LCLaunchExtensionLaunchDate")
 
-        guard var components = URLComponents(string: "livecontainer://livecontainer-launch") else {
+        guard var components = URLComponents(string: "iitwins://iitwins-launch") else {
             throw ShareExtensionError("Unable to build SideStore launch URL.")
         }
         var queryItems = [
@@ -534,7 +534,7 @@ final class ShareExtensionViewModel: ObservableObject {
     }
 
     private func buildLaunchURL(for item: ShareLaunchItem, launchURLString: String?) -> URL? {
-        var schemeToLaunch = "livecontainer"
+        var schemeToLaunch = "iitwins"
         var newLaunch = false
 
         if var runningLC = LCSharedUtils.getContainerUsingLCScheme(withFolderName: item.container.folderName) {
@@ -544,7 +544,7 @@ final class ShareExtensionViewModel: ObservableObject {
             schemeToLaunch = runningLC
         } else {
             newLaunch = true
-            schemeToLaunch = item.app.isShared ? (firstFreeInstalledLC() ?? "livecontainer") : "livecontainer"
+            schemeToLaunch = item.app.isShared ? (firstFreeInstalledLC() ?? "iitwins") : "iitwins"
         }
 
         if newLaunch && !item.app.isHidden && !item.app.isLocked && !item.app.isJITNeeded {
@@ -559,7 +559,7 @@ final class ShareExtensionViewModel: ObservableObject {
 
         var components = URLComponents()
         components.scheme = schemeToLaunch
-        components.host = "livecontainer-launch"
+        components.host = "iitwins-launch"
         var queryItems = [
             URLQueryItem(name: "bundle-name", value: item.app.relativeBundlePath),
             URLQueryItem(name: "container-folder-name", value: item.container.folderName)

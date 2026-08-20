@@ -140,7 +140,7 @@ struct LCWebView: View {
         let bundleId = app.appInfo.relativeBundlePath!
         if let runningLC = LCSharedUtils.getContainerUsingLCScheme(withFolderName: app.uiDefaultDataFolder){
             let encodedUrl = Data(url.absoluteString.utf8).base64EncodedString()
-            if let urlToOpen = URL(string: "\(runningLC)://livecontainer-launch?bundle-name=\(bundleId)&open-url=\(encodedUrl)"), UIApplication.shared.canOpenURL(urlToOpen) {
+            if let urlToOpen = URL(string: "\(runningLC)://iitwins-launch?bundle-name=\(bundleId)&open-url=\(encodedUrl)"), UIApplication.shared.canOpenURL(urlToOpen) {
                 NSLog("[LC] urlToOpen = \(urlToOpen.absoluteString)")
                 await UIApplication.shared.open(urlToOpen)
                 isPresent = false

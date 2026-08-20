@@ -308,7 +308,7 @@ void handleLiveContainerLaunch(NSString* bundleName, NSString* containerFolderNa
             if([runningLC hasSuffix:@"liveprocess"]) {
                 runningLC = runningLC.stringByDeletingPathExtension;
             }
-            NSString* urlStr = [NSString stringWithFormat:@"%@://livecontainer-launch?bundle-name=%@&container-folder-name=%@", runningLC, bundleName, containerFolderName];
+            NSString* urlStr = [NSString stringWithFormat:@"%@://iitwins-launch?bundle-name=%@&container-folder-name=%@", runningLC, bundleName, containerFolderName];
             [UIApplication.sharedApplication openURL:[NSURL URLWithString:urlStr] options:@{} completionHandler:nil];
             return;
         }
@@ -418,7 +418,7 @@ static LCControlAppURLHandling LCHandleControlAppURL(NSURL *url, NSString** modi
     }
 
     // pass through sidestore urls
-    if(NSUserDefaults.isSideStore && ![url.scheme isEqualToString:@"livecontainer"]) {
+    if(NSUserDefaults.isSideStore && ![url.scheme isEqualToString:@"iitwins"]) {
         return LCControlAppURLHandlingPassThrough;
     }
 
@@ -434,11 +434,11 @@ static LCControlAppURLHandling LCHandleControlAppURL(NSURL *url, NSString** modi
     }
     NSString* urlHost = url.host;
     
-    if([urlHost isEqualToString:@"livecontainer-relaunch"]) {
+    if([urlHost isEqualToString:@"iitwins-relaunch"]) {
         return LCControlAppURLHandlingStop;
     }
     
-    if([urlHost isEqualToString:@"livecontainer-launch"]) {
+    if([urlHost isEqualToString:@"iitwins-launch"]) {
         // If it's not current app, then switch, otherwise check if we need to open the url
         NSString* bundleName = nil;
         NSString* openUrl = nil;
@@ -613,7 +613,7 @@ static LCControlAppURLHandling LCHandleControlAppURL(NSURL *url, NSString** modi
 }
 
 - (void)hook_openURL:(NSURL *)url options:(NSDictionary<NSString *,id> *)options completionHandler:(void (^)(_Bool))completion {
-    if(NSUserDefaults.isSideStore && ![url.scheme isEqualToString:@"livecontainer"]) {
+    if(NSUserDefaults.isSideStore && ![url.scheme isEqualToString:@"iitwins"]) {
         [self hook_openURL:url options:options completionHandler:completion];
         return;
     }
@@ -621,7 +621,7 @@ static LCControlAppURLHandling LCHandleControlAppURL(NSURL *url, NSString** modi
     BOOL openSelf = canAppOpenItself(url);
     BOOL redirectToHost = shouldRedirectOpenURLToHost(url);;
     if(openSelf || redirectToHost) {
-        NSString* schemeToUse = openSelf ? NSUserDefaults.lcAppUrlScheme : @"livecontainer";
+        NSString* schemeToUse = openSelf ? NSUserDefaults.lcAppUrlScheme : @"iitwins";
         NSData *data = [url.absoluteString dataUsingEncoding:NSUTF8StringEncoding];
         NSString *encodedUrl = [data base64EncodedStringWithOptions:0];
         NSString* finalUrlStr = [NSString stringWithFormat:@"%@://open-url?url=%@", schemeToUse, encodedUrl];
@@ -702,7 +702,7 @@ static LCControlAppURLHandling LCHandleControlAppURL(NSURL *url, NSString** modi
     BOOL openSelf = canAppOpenItself(url);
     BOOL redirectToHost = shouldRedirectOpenURLToHost(url);
     if(openSelf || redirectToHost) {
-        NSString* schemeToUse = openSelf ? NSUserDefaults.lcAppUrlScheme : @"livecontainer";
+        NSString* schemeToUse = openSelf ? NSUserDefaults.lcAppUrlScheme : @"iitwins";
         NSData *data = [url.absoluteString dataUsingEncoding:NSUTF8StringEncoding];
         NSString *encodedUrl = [data base64EncodedStringWithOptions:0];
         NSString* finalUrlStr = [NSString stringWithFormat:@"%@://open-url?url=%@", schemeToUse, encodedUrl];

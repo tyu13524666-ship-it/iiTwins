@@ -247,9 +247,9 @@
 - (NSDictionary *)generateWebClipConfigWithContainerId:(NSString*)containerId containerName:(NSString*)containerName iconStyle:(GeneratedIconStyle)style{
     NSString* appClipUrl;
     if(containerId) {
-        appClipUrl = [NSString stringWithFormat:@"livecontainer://livecontainer-launch?bundle-name=%@&container-folder-name=%@", self.bundlePath.lastPathComponent, containerId];
+        appClipUrl = [NSString stringWithFormat:@"iitwins://iitwins-launch?bundle-name=%@&container-folder-name=%@", self.bundlePath.lastPathComponent, containerId];
     } else {
-        appClipUrl = [NSString stringWithFormat:@"livecontainer://livecontainer-launch?bundle-name=%@", self.bundlePath.lastPathComponent];
+        appClipUrl = [NSString stringWithFormat:@"iitwins://iitwins-launch?bundle-name=%@", self.bundlePath.lastPathComponent];
     }
     
     UIImage* icon = [self generateLiveContainerWrappedIconWithStyle:style];

@@ -171,7 +171,7 @@ NSString* FBSOpenApplicationOptionKeyPayloadURL = @"__PayloadURL";
 
 + (BOOL)launchToGuestAppWithURL:(NSURL *)url {
     NSURLComponents* components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
-    if(![components.host isEqualToString:@"livecontainer-launch"]) return NO;
+    if(![components.host isEqualToString:@"iitwins-launch"]) return NO;
 
     NSString* launchBundleId = nil;
     NSString* openUrl = nil;
@@ -264,7 +264,7 @@ NSString* FBSOpenApplicationOptionKeyPayloadURL = @"__PayloadURL";
     return errno==ESRCH ? nil : appUsageInfo[@"runningLC"];
 }
 
-// lc can be something like livecontainer or livecontainer2.liveprocess, such that one LC can jump to another LC hosting the multitask app when user presses run while it's running
+// lc can be something like iitwins or iitwins2.liveprocess, such that one LC can jump to another LC hosting the multitask app when user presses run while it's running
 + (void)setContainerUsingByLC:(NSString*)lc folderName:(NSString*)folderName auditToken:(uint64_t)val57 {
     NSURL* infoPath = [self containerLockPath];
     
@@ -399,7 +399,7 @@ NSString* FBSOpenApplicationOptionKeyPayloadURL = @"__PayloadURL";
 }
 
 + (NSArray<NSString*>*)lcUnorderedUrlSchemes {
-    NSArray<NSString *> *defaultSchemes = @[@"livecontainer", @"livecontainer2", @"livecontainer3"];
+    NSArray<NSString *> *defaultSchemes = @[@"iitwins", @"iitwins2", @"iitwins3"];
     return defaultSchemes;
 }
 

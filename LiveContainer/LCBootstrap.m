@@ -769,7 +769,7 @@ int LiveContainerMain(int argc, char *argv[]) {
     }
     NSString* runningLC = [LCSharedUtils getContainerUsingLCSchemeWithFolderName:selectedContainer];
     // if another instance is running, we just switch to that one, these should be called after uiapplication initialized
-    // however if the running lc is liveprocess and current lc is livecontainer1 we just continue
+    // however if the running lc is liveprocess and current lc is iitwins1 we just continue
     if(selectedApp && runningLC) {
         [lcUserDefaults removeObjectForKey:@"selected"];
         [lcUserDefaults removeObjectForKey:@"selectedContainer"];
@@ -785,9 +785,9 @@ int LiveContainerMain(int argc, char *argv[]) {
             // Base64 encode the data
             NSString* urlStr;
             if(selectedContainer) {
-                urlStr = [NSString stringWithFormat:@"%@://livecontainer-launch?bundle-name=%@&container-folder-name=%@", runningLC, selectedAppBackUp, selectedContainer];
+                urlStr = [NSString stringWithFormat:@"%@://iitwins-launch?bundle-name=%@&container-folder-name=%@", runningLC, selectedAppBackUp, selectedContainer];
             } else {
-                urlStr = [NSString stringWithFormat:@"%@://livecontainer-launch?bundle-name=%@", runningLC, selectedAppBackUp];
+                urlStr = [NSString stringWithFormat:@"%@://iitwins-launch?bundle-name=%@", runningLC, selectedAppBackUp];
             }
             
             NSURL* url = [NSURL URLWithString:urlStr];

@@ -81,15 +81,15 @@ struct LaunchAppExtension: AppIntent {
     func perform() async throws -> some IntentResult {
         // sanitize url
         let normalizedLaunchScheme = launchURL.scheme?.lowercased()
-        var isLiveContainerURL = normalizedLaunchScheme == "livecontainer"
-        let preferredScheme = isLiveContainerURL ? nil : (normalizedLaunchScheme == "livecontainer1" ? "livecontainer" : normalizedLaunchScheme)
+        var isLiveContainerURL = normalizedLaunchScheme == "iitwins"
+        let preferredScheme = isLiveContainerURL ? nil : (normalizedLaunchScheme == "iitwins1" ? "iitwins" : normalizedLaunchScheme)
         
         if let preferredScheme, let schemes = LCSharedUtils.lcUnorderedUrlSchemes() {
             isLiveContainerURL = schemes.contains(preferredScheme)
         }
         
         if !isLiveContainerURL && normalizedLaunchScheme != "sidestore" {
-            throw LaunchAppExtensionError("Not a livecontainer URL!")
+            throw LaunchAppExtensionError("Not a iitwins URL!")
         }
         
         guard
@@ -100,15 +100,15 @@ struct LaunchAppExtension: AppIntent {
         }
         
         if normalizedLaunchScheme == "sidestore" {
-            lcSharedDefaults.set("livecontainer", forKey: "LCLaunchExtensionScheme")
+            lcSharedDefaults.set("iitwins", forKey: "LCLaunchExtensionScheme")
             lcSharedDefaults.set("builtinSideStore", forKey: "LCLaunchExtensionBundleID")
             lcSharedDefaults.set(Date.now, forKey: "LCLaunchExtensionLaunchDate")
             try await openURL(launchOptions: ["url": launchURL])
             return .result()
         }
         
-        if launchURL.host != "livecontainer-launch" {
-            throw LaunchAppExtensionError("Not a livecontainer launch URL!")
+        if launchURL.host != "iitwins-launch" {
+            throw LaunchAppExtensionError("Not a iitwins launch URL!")
         }
 
         var bundleId: String? = nil
@@ -200,8 +200,8 @@ struct LaunchAppExtension: AppIntent {
                 schemeToLaunch = firstFreeInstalledLC(preferredScheme: preferredScheme)
                 allowClassicMode = schemeToLaunch != nil
             } else {
-                schemeToLaunch = "livecontainer"
-                allowClassicMode = !LCSharedUtils.isLCScheme(inUse: "livecontainer")
+                schemeToLaunch = "iitwins"
+                allowClassicMode = !LCSharedUtils.isLCScheme(inUse: "iitwins")
             }
         }
 

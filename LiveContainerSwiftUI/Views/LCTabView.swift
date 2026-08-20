@@ -122,7 +122,7 @@ struct LCTabView: View {
             }
             
             switch host {
-            case "livecontainer-launch", "install", "open-web-page", "open-url":
+            case "iitwins-launch", "install", "open-web-page", "open-url":
                 sharedModel.selectedTab = .apps
             case "certificate":
                 sharedModel.selectedTab = .settings
