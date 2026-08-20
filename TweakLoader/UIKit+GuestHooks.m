@@ -5,7 +5,7 @@
 #import <LocalAuthentication/LocalAuthentication.h>
 #import "Localization.h"
 
-static void LCGuestDiagLog(NSString* format, ...) NS_FORMAT_FUNCTION(1,2);
+static void LCGuestDiagLog(NSString* format, ...);
 
 UIInterfaceOrientation LCOrientationLock = UIInterfaceOrientationUnknown;
 NSMutableArray<NSString*>* LCSupportedUrlSchemes = nil;
@@ -31,9 +31,9 @@ static void UIKitGuestHooksInit() {
         LCGuestDiagLog(@"===== 已掛上視窗尺寸監看 =====");
     } else {
         LCGuestDiagLog(@"===== 未掛上視窗尺寸監看：isLiveProcess=%d 鍵盤避讓停用=%d 重排停用=%d =====",
-                       NSUserDefaults.isLiveProcess,
-                       [NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableKeyboardAvoidance"],
-                       [NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableGuestRelayout"]);
+                       (int)NSUserDefaults.isLiveProcess,
+                       (int)[NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableKeyboardAvoidance"],
+                       (int)[NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableGuestRelayout"]);
     }
     NSInteger LCOrientationLockDirection = [NSUserDefaults.guestAppInfo[@"LCOrientationLock"] integerValue];
     if(LCOrientationLockDirection != 0 && [UIDevice.currentDevice userInterfaceIdiom] == UIUserInterfaceIdiomPhone) {
