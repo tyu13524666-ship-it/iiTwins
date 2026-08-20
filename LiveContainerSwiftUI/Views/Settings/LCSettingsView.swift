@@ -47,9 +47,12 @@ struct LCSettingsView: View {
     @StateObject private var certificateImportPasswordAlert = InputHelper()
     
     @AppStorage("LCFrameShortcutIcons") var frameShortIcon = false
-    @AppStorage("LCDisableKeychainIsolation") var disableKeychainIsolation = false
-    @AppStorage("LCIsolateSecKeys") var isolateSecKeys = false
-    @AppStorage("LCKeychainDiagnostics") var keychainDiagnostics = false
+    // 這三項會在 guest app 的進程中被讀取。開啟多工時 guest app 跑在 LiveProcess
+    // 這個獨立的 app extension 裡，看不到主程式自己的偏好設定，因此一律存放於
+    // App Group，兩邊才讀得到同一份值。
+    @AppStorage("LCDisableKeychainIsolation", store: LCUtils.appGroupUserDefault) var disableKeychainIsolation = false
+    @AppStorage("LCIsolateSecKeys", store: LCUtils.appGroupUserDefault) var isolateSecKeys = false
+    @AppStorage("LCKeychainDiagnostics", store: LCUtils.appGroupUserDefault) var keychainDiagnostics = false
     @AppStorage("LCSwitchAppWithoutAsking") var silentSwitchApp = false
     @AppStorage("LCOpenWebPageWithoutAsking") var silentOpenWebPage = false
     @AppStorage("LCDontSignApp", store: LCUtils.appGroupUserDefault) var dontSignApp = false

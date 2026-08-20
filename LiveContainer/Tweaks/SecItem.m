@@ -40,6 +40,19 @@ NSString* containerId = nil;
 static BOOL gDiagEnabled = NO;
 static NSString* gDiagLogPath = nil;
 
+// 本程式的設定必須從 App Group 讀取。開啟多工時 guest app 跑在 LiveProcess
+// 這個獨立的 app extension 裡，它有自己的 bundle identifier，因此
+// standardUserDefaults 與 lcUserDefaults 讀到的都是該 extension 自己的設定，
+// 看不到主程式寫入的值。App Group 是兩邊共用的唯一位置。
+static NSUserDefaults* lcSettings(void) {
+    static NSUserDefaults* defaults = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        defaults = [[NSUserDefaults alloc] initWithSuiteName:[LCSharedUtils appGroupID]];
+    });
+    return defaults;
+}
+
 // 直接用數值比對，避免不同 SDK 版本對某些 errSec 常數的可見性差異造成編譯失敗
 static NSString* diagStatusName(OSStatus s) {
     switch((int)s) {
@@ -303,8 +316,19 @@ static OSStatus diag_SecKeyGeneratePair(CFDictionaryRef parameters, SecKeyRef *p
 }
 
 // 開啟診斷時建立 log 檔並寫入環境摘要。回傳是否成功啟用。
+// 診斷開關容錯讀取：任一來源為開即啟用。設定值原本寫在主程式自己的偏好設定中，
+// 修正後改寫入 App Group，兩處都要認得，才不會因為存放位置變更而失效。
+// 僅限診斷開關使用；會改變行為的開關（例如停用隔離）仍只讀 App Group，
+// 避免舊的殘留值意外生效導致已登入的 App 需要重新登入。
+static BOOL diagFlagEnabled(void) {
+    if([lcSettings() boolForKey:@"LCKeychainDiagnostics"]) return YES;
+    if([NSUserDefaults.lcUserDefaults boolForKey:@"LCKeychainDiagnostics"]) return YES;
+    if([NSUserDefaults.standardUserDefaults boolForKey:@"LCKeychainDiagnostics"]) return YES;
+    return NO;
+}
+
 static BOOL diagSetup(BOOL isolationEnabled) {
-    if(![NSUserDefaults.lcUserDefaults boolForKey:@"LCKeychainDiagnostics"]) return NO;
+    if(!diagFlagEnabled()) return NO;
 
     const char* home = getenv("HOME");
     if(!home) return NO;
@@ -321,10 +345,16 @@ static BOOL diagSetup(BOOL isolationEnabled) {
                [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"?"]);
     diagWrite([NSString stringWithFormat:@"keychain 隔離=%@  金鑰隔離=%@",
                isolationEnabled ? @"開啟" : @"關閉",
-               [NSUserDefaults.lcUserDefaults boolForKey:@"LCIsolateSecKeys"] ? @"開啟" : @"關閉"]);
+               [lcSettings() boolForKey:@"LCIsolateSecKeys"] ? @"開啟" : @"關閉"]);
     if(isolationEnabled) {
         diagWrite([NSString stringWithFormat:@"改寫後的 accessGroup=%@", accessGroup ?: @"(nil)"]);
     }
+    diagWrite([NSString stringWithFormat:@"設定來源檢查 appGroup=%d lc=%d standard=%d  appGroupID=%@",
+               [lcSettings() boolForKey:@"LCKeychainDiagnostics"],
+               [NSUserDefaults.lcUserDefaults boolForKey:@"LCKeychainDiagnostics"],
+               [NSUserDefaults.standardUserDefaults boolForKey:@"LCKeychainDiagnostics"],
+               [LCSharedUtils appGroupID] ?: @"(nil)"]);
+    diagWrite([NSString stringWithFormat:@"log 路徑=%@", gDiagLogPath]);
     return YES;
 }
 
@@ -337,7 +367,7 @@ void SecItemGuestHooksInit(void)  {
     // 停用隔離後，guest app 直接使用宿主的 keychain。由於宿主與原生 App 的
     // bundle ID 不同，系統層級本來就是隔離的；只有「同一個 App 開多個容器」
     // 才需要這個機制。
-    if([NSUserDefaults.lcUserDefaults boolForKey:@"LCDisableKeychainIsolation"]) {
+    if([lcSettings() boolForKey:@"LCDisableKeychainIsolation"]) {
         NSLog(@"[LC] keychain isolation fully disabled by user setting");
         // 隔離關閉時原本完全不掛 hook。若使用者開了診斷，仍要掛上純記錄版本，
         // 否則「關閉隔離後為何還是失敗」這個情境永遠觀察不到。
@@ -392,7 +422,7 @@ void SecItemGuestHooksInit(void)  {
     // group，之後就可能無法取用，導致 LINE 這類 App 出現公鑰同步失敗與解密失敗
     // （NELO 記錄的 barrier_publicKeySynced / handleDecryptionFailure）。
     // 一般 keychain 項目（登入 token 等）仍維持隔離，多容器登入不同帳號不受影響。
-    if([NSUserDefaults.lcUserDefaults boolForKey:@"LCIsolateSecKeys"]) {
+    if([lcSettings() boolForKey:@"LCIsolateSecKeys"]) {
         litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateRandomKey, new_SecKeyCreateRandomKey, nil);
         litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateWithData, new_SecKeyCreateWithData, nil);
         litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyGeneratePair, new_SecKeyGeneratePair, nil);
