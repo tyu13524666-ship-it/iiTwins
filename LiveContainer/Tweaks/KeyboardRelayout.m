@@ -122,6 +122,15 @@ static void kbHandleHeightChange(UIWindow* window, NSString* via, CGFloat before
         kbLog(@"  （使用者已停用，不處理）");
         return;
     }
+
+    // 視窗被收起時高度會降到極小。此時輸入框仍持有輸入焦點，鍵盤會留在畫面上
+    // 蓋住其他內容。先前自視窗端下達收鍵盤的指令無效（跨進程傳不進來），此處
+    // 與 app 同一進程，可直接令其放棄焦點。
+    if(after < 100.0 && before >= 100.0) {
+        [window endEditing:YES];
+        kbLog(@"  視窗已收起，令輸入框放棄焦點");
+        return;
+    }
     // setFrame 與 layoutSubviews 會就同一次變動各觸發一次，短時間內合併處理
     static NSMutableSet* pending = nil;
     static dispatch_once_t once;
