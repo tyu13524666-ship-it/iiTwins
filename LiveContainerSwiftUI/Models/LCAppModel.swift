@@ -138,6 +138,17 @@ class LCAppModel: ObservableObject, Hashable {
             return appInfo.displayName() ?? "?"
         }
     }
+
+    // 多任務視窗的標題。多開同一個 App 時，只顯示 App 名稱無法分辨
+    // 是哪個容器（哪個帳號），因此附上容器名稱。
+    // 容器沒取過名字時 name 會等於資料夾 UUID，這種情況維持原樣。
+    public var multitaskWindowTitle: String {
+        let base = appInfo.displayName() ?? "?"
+        guard let container = uiSelectedContainer else { return base }
+        let name = container.name
+        if name.isEmpty || name == container.folderName { return base }
+        return "\(base) - \(name)"
+    }
     
     public var shouldLaunchInMultitaskMode : Bool {
         get {
@@ -338,7 +349,7 @@ class LCAppModel: ObservableObject, Hashable {
         if jitNeeded || is32bit {
             if multitask, #available(iOS 17.4, *) {
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                    LCUtils.launchMultitaskGuestApp(appInfo.displayName()) { pidNumber, error in
+                    LCUtils.launchMultitaskGuestApp(self.multitaskWindowTitle) { pidNumber, error in
                         if let error {
                             continuation.resume(throwing: error)
                             return
@@ -366,7 +377,7 @@ class LCAppModel: ObservableObject, Hashable {
                 }
             }
         } else if multitask, #available(iOS 16.0, *) {
-            try await LCUtils.launchMultitaskGuestApp(appInfo.displayName())
+            try await LCUtils.launchMultitaskGuestApp(self.multitaskWindowTitle)
         } else {
             if #available(iOS 26.0, *), FileManager.default.fileExists(atPath: "\(appInfo.bundlePath()!)/Frameworks/MetalANGLE.framework/MetalANGLE") {
                 let fileContents = "\(appInfo.bundlePath()!)/Frameworks/MetalANGLE.framework/MetalANGLE".data(using: .utf8)
