@@ -526,8 +526,9 @@ static NSString* invokeAppMain(NSString *selectedApp, NSString *selectedContaine
     }
     if(isLiveProcess) {
         NSURLSCGuestHooksInit();
-        // 多工模式下視窗會隨鍵盤縮短，需要促使 guest app 重新排版
-        KeyboardRelayoutHookInit();
+        // 鍵盤重排的處理暫不啟用：其掛載方式會誤換到 UIView 的實作而導致
+        // guest app 啟動即崩潰，待改以安全方式掛載並驗證後再行開啟。
+        // KeyboardRelayoutHookInit();
     }
     // ignore setting handler from guest app
     litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, NSSetUncaughtExceptionHandler, hook_do_nothing, nil);
