@@ -790,8 +790,7 @@ static void LCGuestDiagLog(NSString* format, ...) {
         fmt = [[NSDateFormatter alloc] init];
         fmt.dateFormat = @"HH:mm:ss.SSS";
     });
-    NSString* line = [NSString stringWithFormat:@"%@ %@
-", [fmt stringFromDate:[NSDate date]], message];
+    NSString* line = [NSString stringWithFormat:@"%@ %@\n", [fmt stringFromDate:[NSDate date]], message];
     FILE* f = fopen([dir stringByAppendingPathComponent:@"LCGuestRelayout.log"].UTF8String, "a");
     if(!f) return;
     fputs(line.UTF8String, f);
