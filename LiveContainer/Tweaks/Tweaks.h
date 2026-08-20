@@ -15,6 +15,7 @@ void NSFMGuestHooksInit(void);
 void NSURLSCGuestHooksInit(void);
 void initDead10ccFix(void);
 void IDFVHookInit(NSUUID* uuid);
+void SiriBypassHookInit(void);
 
 @interface NSBundle(LiveContainer)
 - (instancetype)initWithPathForMainBundle:(NSString *)path;

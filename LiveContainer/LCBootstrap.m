@@ -514,6 +514,8 @@ static NSString* invokeAppMain(NSString *selectedApp, NSString *selectedContaine
     
     // hook NSUserDefault before running libraries' initializers
     NUDGuestHooksInit();
+    // 免費憑證沒有 Siri entitlement，先擋掉相關呼叫避免 guest app 被系統終止
+    SiriBypassHookInit();
     if(!isSideStore) {
         SecItemGuestHooksInit();
         NSFMGuestHooksInit();
