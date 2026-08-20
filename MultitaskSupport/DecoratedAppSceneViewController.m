@@ -682,6 +682,19 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
     } completion:nil];
 
     LCKeyboardDiagLog(self.dataUUID, @"  已將安全區域下緣增加 %.1f（動畫 %.2fs 曲線 %ld）", overlap, duration, (long)curve);
+
+    // 容器內的 app 在鍵盤開始移動的當下正忙於自身的處理，此時送出的變更它未必
+    // 理會，畫面因而留白，直到使用者再碰一下才重繪。於動畫結束後補送一次同樣
+    // 的設定，等同代替使用者做那一下，讓它有機會重新排版。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((duration + 0.05) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        typeof(self) strongSelf = weakSelf;
+        if(!strongSelf || !strongSelf.isMaximized) return;
+        strongSelf.appSceneVC.shouldSkipDebounceOnce = YES;
+        [strongSelf.appSceneVC updateSettingsWithBlock:^(UIMutableApplicationSceneSettings *settings) {
+            [strongSelf updateMaximizedFrameWithSettings:settings];
+        }];
+        LCKeyboardDiagLog(strongSelf.dataUUID, @"  動畫結束後補送一次設定，促使重新排版");
+    });
 }
 
 - (void)dealloc {
