@@ -10,13 +10,12 @@ import SwiftUI
 struct LCMultitaskSettingView: View {
     @AppStorage("LCMultitaskMode", store: LCUtils.appGroupUserDefault) var multitaskMode: MultitaskMode = .virtualWindow
     @AppStorage("LCLaunchInMultitaskMode") var launchInMultitaskMode = false
-    @AppStorage("LCLaunchMultitaskMaximized") var launchMultitaskMaximized = false
+    // 預設全螢幕開啟。改存於 App Group，讓視窗端（可能在 LiveProcess 進程）讀得到
+    @AppStorage("LCLaunchMultitaskMaximized", store: LCUtils.appGroupUserDefault) var launchMultitaskMaximized = true
     @AppStorage("LCMultitaskBottomWindowBar", store: LCUtils.appGroupUserDefault) var bottomWindowBar = false
-    @AppStorage("LCAutoEndPiP", store: LCUtils.appGroupUserDefault) var autoEndPiP = false
     @AppStorage("LCSkipTerminatedScreen", store: LCUtils.appGroupUserDefault) var skipTerminatedScreen = false
     @AppStorage("LCRestartTerminatedApp", store: LCUtils.appGroupUserDefault) var restartTerminatedApp = false
     @AppStorage("LCMaxOneAppOnStage", store: LCUtils.appGroupUserDefault) var onlyOneAppOnStage = false
-    @AppStorage("LCDockWidth", store: LCUtils.appGroupUserDefault) var dockWidth: Double = 80
     @AppStorage("LCHideCollapsedDock", store: LCUtils.appGroupUserDefault) var hideCollapsedDock: Bool = false
     @AppStorage("LCRedirectURLToHost", store: LCUtils.appGroupUserDefault) var redirectURLToHost = false
     
@@ -44,9 +43,6 @@ struct LCMultitaskSettingView: View {
                             Text("lc.settings.onlyOneAppOnStage".loc)
                         }
                     }
-                    Toggle(isOn: $autoEndPiP) {
-                        Text("lc.settings.autoEndPiP".loc)
-                    }
                     Toggle(isOn: $skipTerminatedScreen) {
                         Text("lc.settings.skipTerminatedScreen".loc)
                     }
@@ -66,21 +62,7 @@ struct LCMultitaskSettingView: View {
             }
             
             Section {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("lc.settings.dockWidth".loc)
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Text("\(Int(dockWidth))px")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
-                    }
-                    Slider(value: $dockWidth, in: 20...120) {
-                        Text("lc.settings.dockWidth".loc)
-                    }
-                    .tint(.accentColor)
-                }
-                .padding(.vertical, 4)
+                // Dock 欄寬度改由程式決定（預設 70px），不再開放調整
                 Toggle(isOn: $hideCollapsedDock) {
                     Text("lc.settings.hideCollapsedDock".loc)
                 }

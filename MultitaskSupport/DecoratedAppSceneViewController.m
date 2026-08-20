@@ -26,7 +26,10 @@
     
     _dataUUID = dataUUID;
     _scaleRatio = 1.0;
-    _isMaximized = [NSUserDefaults.lcUserDefaults boolForKey:@"LCLaunchMultitaskMaximized"];
+    // 預設以全螢幕開啟。設定存於 App Group，因為視窗可能建立在 LiveProcess
+    // 這個獨立進程中，該處讀不到主程式自身的偏好設定。
+    id maximizedSetting = [NSUserDefaults.lcSharedDefaults objectForKey:@"LCLaunchMultitaskMaximized"];
+    _isMaximized = maximizedSetting ? [maximizedSetting boolValue] : YES;
     _appSceneVC = [[AppSceneViewController alloc] initWithBundleId:bundleId dataUUID:dataUUID delegate:self];
     self.title = windowName;
     [self setupDecoratedView];

@@ -38,7 +38,10 @@ bool sideStoreExist = false;
     return lcUserDefaults;
 }
 + (instancetype)lcSharedDefaults {
-    if(!lcUserDefaults) {
+    // 原本判斷的是 lcUserDefaults，而它在程式啟動時就已具值，導致這裡永遠不會
+    // 初始化，lcSharedDefaults 始終為 nil。所有透過它讀取的設定（底部視窗列、
+    // 略過終止提示、自動離開 PiP、嚴格隱藏等）因此一律被當成關閉。
+    if(!lcSharedDefaults) {
         lcSharedDefaults = [[NSUserDefaults alloc] initWithSuiteName: [LCSharedUtils appGroupID]];
     }
     return lcSharedDefaults;

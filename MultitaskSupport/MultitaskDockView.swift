@@ -141,7 +141,7 @@ class AppInfoProvider {
 
     public struct Constants {
         // MARK: - Layout & Sizing
-        static let defaultDockWidth: CGFloat = 90.0
+        static let defaultDockWidth: CGFloat = 70.0
         static let minAdaptiveDockWidth: CGFloat = 50.0
         static let minAdaptiveIconSize: CGFloat = 10.0
         static let maxIconSize: CGFloat = 100.0
