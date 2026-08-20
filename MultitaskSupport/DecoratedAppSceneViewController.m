@@ -491,7 +491,10 @@
     [self.view layoutIfNeeded];
     [UIView animateWithDuration:0.3 animations:^{
         BOOL bottomWindowBar = [NSUserDefaults.lcSharedDefaults boolForKey:@"LCMultitaskBottomWindowBar"];
-        BOOL hideWindowBar = MultitaskDockManager.shared.isCollapsed && self.isMaximized;
+        // 原本：dock 收合且視窗最大化時連同視窗控制列一起隱藏，
+        // 導致全螢幕時沒有任何可以點回主畫面的入口（要先展開 dock 才會出現）。
+        // 改為讓控制列常駐，需要沉浸式全螢幕時再手動最小化即可。
+        BOOL hideWindowBar = NO;
         CGFloat navBarHeight = hideWindowBar ? 0 : 44;
         self.navigationBar.alpha = hideWindowBar ? 0 : 1;
         self.navigationBar.hidden = hideWindowBar;
