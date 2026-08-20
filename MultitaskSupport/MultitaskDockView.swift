@@ -142,8 +142,6 @@ class AppInfoProvider {
     public struct Constants {
         // MARK: - Layout & Sizing
         static let defaultDockWidth: CGFloat = 70.0
-        /// 放開手指時仍視為「點擊」的最大位移；超過即認定為拖曳 Dock
-        static let tapMaxMovement: CGFloat = 10.0
         static let minAdaptiveDockWidth: CGFloat = 50.0
         static let minAdaptiveIconSize: CGFloat = 10.0
         static let maxIconSize: CGFloat = 100.0
@@ -1173,6 +1171,12 @@ struct AppIconView: View {
 }
 
 // MARK: - Press Gesture Helper
+
+/// 放開手指時仍視為「點擊」的最大位移；超過即認定為拖曳 Dock。
+/// 定義於檔案層級，因為下方的手勢輔助函式並未限定 iOS 版本，
+/// 不能引用只在 iOS 16 之後存在的型別。
+private let dockTapMaxMovement: CGFloat = 10.0
+
 extension View {
     /// 放開時若手指幾乎沒有移動才視為點擊，location 才會有值。
     /// 移動超過容許範圍代表使用者是在拖曳 Dock 本身，此時 location 為 nil，
@@ -1187,7 +1191,7 @@ extension View {
                 }
                 .onEnded { value in
                     let moved = hypot(value.translation.width, value.translation.height)
-                    onRelease(moved <= MultitaskDockManager.Constants.tapMaxMovement ? value.startLocation : nil)
+                    onRelease(moved <= dockTapMaxMovement ? value.startLocation : nil)
                 }
         )
     }
