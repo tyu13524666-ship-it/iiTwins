@@ -279,25 +279,25 @@
         @"IgnoreManifestScope": @YES,
         @"IsRemovable": @YES,
         @"Label": clipLabel,
-        @"PayloadDescription": [NSString stringWithFormat:@"Web Clip for launching %@ (%@) in LiveContainer", self.displayName, self.bundlePath.lastPathComponent],
+        @"PayloadDescription": [NSString stringWithFormat:@"Web Clip for launching %@ (%@) in iiTwins", self.displayName, self.bundlePath.lastPathComponent],
         @"PayloadDisplayName": clipLabel,
         @"PayloadIdentifier": payloadIdentifier,
         @"PayloadType": @"com.apple.webClip.managed",
         @"PayloadUUID": NSUUID.UUID.UUIDString,
         @"PayloadVersion": @(1),
         @"Precomposed": @NO,
-        @"toPayloadOrganization": @"LiveContainer",
+        @"toPayloadOrganization": @"iiTwins",
         @"URL": appClipUrl
     };
     return @{
         @"ConsentText": @{
-            @"default": [NSString stringWithFormat:@"This profile installs a web clip which opens %@ (%@) in LiveContainer", self.displayName, self.bundlePath.lastPathComponent]
+            @"default": [NSString stringWithFormat:@"This profile installs a web clip which opens %@ (%@) in iiTwins", self.displayName, self.bundlePath.lastPathComponent]
         },
         @"PayloadContent": @[payload],
         @"PayloadDescription": payload[@"PayloadDescription"],
         @"PayloadDisplayName": clipLabel,
         @"PayloadIdentifier": payloadIdentifier,
-        @"PayloadOrganization": @"LiveContainer",
+        @"PayloadOrganization": @"iiTwins",
         @"PayloadRemovalDisallowed": @(NO),
         @"PayloadType": @"Configuration",
         @"PayloadUUID": rootPayloadUUID,
