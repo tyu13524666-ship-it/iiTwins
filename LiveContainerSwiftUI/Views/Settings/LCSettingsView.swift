@@ -131,29 +131,19 @@ struct LCSettingsView: View {
                         Text("lc.settings.jitLessDesc".loc)
                     }
                 }
-                if (store != .Unknown && store != .ADP) || LCUtils.isAppGroupAltStoreLike() {
-                    Section{
+                // 「多個 iiTwins」入口已隱藏。安裝多份程式是早期一份只能執行一個
+                // app 時的做法，多工模式下同一份即可同時執行多個 app，此功能已無
+                // 必要，且涉及重新簽章與更換 bundle identifier，誤用可能產生無法
+                // 安裝的副本。安裝其他 IPA 與各 app 的多容器功能均不受影響。
+                //
+                // 作為第二份執行時仍需要免 JIT 診斷的入口，該情形保留。
+                if sharedModel.multiLCStatus == 2 {
+                    Section {
                         NavigationLink {
-                            LCMultiLCManagementView()
+                            LCJITLessDiagnoseView()
                         } label: {
-                            if sharedModel.multiLCStatus == 0 {
-                                Text("lc.settings.multiLC".loc)
-                            } else if sharedModel.multiLCStatus == 2 {
-                                Text("lc.settings.multiLCIsSecond".loc)
-                            }
-                            
+                            Text("lc.settings.jitlessDiagnose".loc)
                         }
-                        .disabled(sharedModel.multiLCStatus == 2)
-                        
-                        if(sharedModel.multiLCStatus == 2) {
-                            NavigationLink {
-                                LCJITLessDiagnoseView()
-                            } label: {
-                                Text("lc.settings.jitlessDiagnose".loc)
-                            }
-                        }
-                    } footer: {
-                        Text("lc.settings.multiLCDesc".loc)
                     }
                 }
                 
