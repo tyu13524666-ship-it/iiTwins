@@ -5,6 +5,8 @@
 #import <LocalAuthentication/LocalAuthentication.h>
 #import "Localization.h"
 
+static void LCGuestDiagLog(NSString* format, ...) NS_FORMAT_FUNCTION(1,2);
+
 UIInterfaceOrientation LCOrientationLock = UIInterfaceOrientationUnknown;
 NSMutableArray<NSString*>* LCSupportedUrlSchemes = nil;
 BOOL launchURLProcessed = NO;
@@ -26,6 +28,12 @@ static void UIKitGuestHooksInit() {
        ![NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableKeyboardAvoidance"] &&
        ![NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableGuestRelayout"]) {
         swizzle(UIWindow.class, @selector(setBounds:), @selector(hook_setBounds:));
+        LCGuestDiagLog(@"===== 已掛上視窗尺寸監看 =====");
+    } else {
+        LCGuestDiagLog(@"===== 未掛上視窗尺寸監看：isLiveProcess=%d 鍵盤避讓停用=%d 重排停用=%d =====",
+                       NSUserDefaults.isLiveProcess,
+                       [NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableKeyboardAvoidance"],
+                       [NSUserDefaults.lcSharedDefaults boolForKey:@"LCDisableGuestRelayout"]);
     }
     NSInteger LCOrientationLockDirection = [NSUserDefaults.guestAppInfo[@"LCOrientationLock"] integerValue];
     if(LCOrientationLockDirection != 0 && [UIDevice.currentDevice userInterfaceIdiom] == UIUserInterfaceIdiomPhone) {
@@ -765,8 +773,43 @@ static LCControlAppURLHandling LCHandleControlAppURL(NSURL *url, NSString** modi
 // 由於這段程式與 app 同處一個進程，可直接補送一則「鍵盤已離開畫面」的通知：
 // 此時視窗底部已經停在鍵盤上方，對 app 而言確實不再有鍵盤遮擋，輸入列排回
 // 視窗底部即為正確位置。
+// 寫入本容器的 Documents，匯出容器即可取得。與其他診斷共用同一個開關。
+static void LCGuestDiagLog(NSString* format, ...) {
+    if(![NSUserDefaults.lcSharedDefaults boolForKey:@"LCKeychainDiagnostics"]) return;
+    va_list args;
+    va_start(args, format);
+    NSString* message = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
+
+    NSString* dir = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents"];
+    if(![NSFileManager.defaultManager fileExistsAtPath:dir]) return;
+
+    static NSDateFormatter* fmt = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        fmt = [[NSDateFormatter alloc] init];
+        fmt.dateFormat = @"HH:mm:ss.SSS";
+    });
+    NSString* line = [NSString stringWithFormat:@"%@ %@
+", [fmt stringFromDate:[NSDate date]], message];
+    FILE* f = fopen([dir stringByAppendingPathComponent:@"LCGuestRelayout.log"].UTF8String, "a");
+    if(!f) return;
+    fputs(line.UTF8String, f);
+    fclose(f);
+}
+
 static void LCPostSyntheticKeyboardDismissal(UIWindow* window) {
-    if(!window || CGRectIsEmpty(window.bounds)) return;
+    if(!window || CGRectIsEmpty(window.bounds)) {
+        LCGuestDiagLog(@"  略過：視窗為空");
+        return;
+    }
+
+    UIViewController* root = window.rootViewController;
+    LCGuestDiagLog(@"  視窗=%@ rootVC=%@ rootView=%@ 安全區下緣=%.1f",
+                   NSStringFromCGRect(window.bounds),
+                   root ? NSStringFromClass(root.class) : @"(nil)",
+                   NSStringFromCGRect(root.view.frame),
+                   window.safeAreaInsets.bottom);
 
     [window setNeedsLayout];
     [window layoutIfNeeded];
@@ -783,6 +826,7 @@ static void LCPostSyntheticKeyboardDismissal(UIWindow* window) {
     NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
     [center postNotificationName:UIKeyboardWillChangeFrameNotification object:nil userInfo:userInfo];
     [center postNotificationName:UIKeyboardDidChangeFrameNotification object:nil userInfo:userInfo];
+    LCGuestDiagLog(@"  已補送鍵盤離開通知 frame=%@", NSStringFromCGRect(offscreen));
 }
 
 @implementation UIWindow(hook)
@@ -795,6 +839,7 @@ static void LCPostSyntheticKeyboardDismissal(UIWindow* window) {
     [self hook_setBounds:bounds];
     // 只在高度確實改變時處理，避免一般排版流程反覆觸發
     if(fabs(previous.height - bounds.size.height) < 1.0) return;
+    LCGuestDiagLog(@"視窗高度變動 %.1f -> %.1f", previous.height, bounds.size.height);
 
     // 排到下一輪執行，讓 UIKit 先完成自身對新尺寸的處理
     dispatch_async(dispatch_get_main_queue(), ^{
