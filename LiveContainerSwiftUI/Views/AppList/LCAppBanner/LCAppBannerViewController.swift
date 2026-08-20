@@ -311,6 +311,7 @@ final class LCAppBannerViewController: UIViewController, UIContextMenuInteractio
         do {
             guard let profile = configuration.model.appInfo.generateWebClipConfig(
                 withContainerId: configuration.model.uiSelectedContainer?.folderName,
+                containerName: configuration.model.uiSelectedContainer?.name,
                 iconStyle: style
             ) else {
                 throw CocoaError(.propertyListWriteInvalid)

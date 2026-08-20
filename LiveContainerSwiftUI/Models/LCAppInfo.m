@@ -244,7 +244,7 @@
     return newIcon;
 }
 
-- (NSDictionary *)generateWebClipConfigWithContainerId:(NSString*)containerId iconStyle:(GeneratedIconStyle)style{
+- (NSDictionary *)generateWebClipConfigWithContainerId:(NSString*)containerId containerName:(NSString*)containerName iconStyle:(GeneratedIconStyle)style{
     NSString* appClipUrl;
     if(containerId) {
         appClipUrl = [NSString stringWithFormat:@"livecontainer://livecontainer-launch?bundle-name=%@&container-folder-name=%@", self.bundlePath.lastPathComponent, containerId];
@@ -264,8 +264,13 @@
         // 容器資料夾名稱本身就是 UUID，直接拿來當描述檔 UUID：
         // 同一容器重做會覆蓋自己，不同容器則能並存。
         rootPayloadUUID = containerId;
-        NSString* shortId = containerId.length >= 6 ? [containerId substringToIndex:6] : containerId;
-        clipLabel = [NSString stringWithFormat:@"%@ (%@)", self.displayName, shortId];
+        // 容器有自訂名稱就用名稱；沒改過名時 name 會等於資料夾名（UUID），
+        // 這種情況退回顯示前 6 碼，避免圖示名稱變成一長串亂碼。
+        NSString* label = containerName;
+        if(label.length == 0 || [label isEqualToString:containerId]) {
+            label = containerId.length >= 6 ? [containerId substringToIndex:6] : containerId;
+        }
+        clipLabel = [NSString stringWithFormat:@"%@ - %@", self.displayName, label];
     }
 
     NSDictionary *payload = @{
