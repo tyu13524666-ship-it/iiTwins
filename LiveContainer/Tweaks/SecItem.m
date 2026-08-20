@@ -315,6 +315,119 @@ static OSStatus diag_SecKeyGeneratePair(CFDictionaryRef parameters, SecKeyRef *p
     return status;
 }
 
+#pragma mark - 移除外來 access group 的 hook
+
+// 部分 app 會在鑰匙圈查詢中寫死自家開發者帳號的 access group（例如 LINE 26.x
+// 指定 ZW4U99SQQ3.jp.naver.line）。以本程式的簽章執行時，該群組必然無權存取，
+// 系統一律回 errSecMissingEntitlement，導致取不到金鑰而無法解密自身資料。
+//
+// 未寫死的版本（例如 LINE 15.x）帶的是本程式簽章對應的群組，可正常存取；
+// 兩者的差異僅在這一個欄位。因此只要把不屬於本程式團隊的群組指定移除，
+// 讓系統改用預設群組，寫死的版本就能取得與未寫死的版本相同的結果。
+//
+// 只移除「前綴不等於本程式團隊識別碼」的指定，屬於本程式的群組不動，
+// 原本就能正常運作的 app 完全不受影響。
+static NSString* gTeamPrefix = nil;
+
+// 需要移除時回傳處理後的字典，否則回傳 nil 表示原樣使用。
+static NSDictionary* queryWithoutForeignGroup(CFDictionaryRef dict) {
+    if(!dict || !gTeamPrefix) return nil;
+    NSDictionary* d = (__bridge NSDictionary *)dict;
+    id group = d[(__bridge id)kSecAttrAccessGroup];
+    if(![group isKindOfClass:[NSString class]]) return nil;
+    if([(NSString *)group hasPrefix:gTeamPrefix]) return nil;
+
+    NSMutableDictionary* copy = d.mutableCopy;
+    [copy removeObjectForKey:(__bridge id)kSecAttrAccessGroup];
+    return copy;
+}
+
+static OSStatus remap_SecItemAdd(CFDictionaryRef attributes, CFTypeRef *result) {
+    NSDictionary* fixed = queryWithoutForeignGroup(attributes);
+    if(!fixed) {
+        OSStatus s = orig_SecItemAdd(attributes, result);
+        diagLogStatus(@"SecItemAdd", attributes, s, NO);
+        return s;
+    }
+    OSStatus s = orig_SecItemAdd((__bridge CFDictionaryRef)fixed, result);
+    diagLogStatus(@"SecItemAdd[已移除外來群組]", attributes, s, YES);
+    return s;
+}
+
+static OSStatus remap_SecItemCopyMatching(CFDictionaryRef query, CFTypeRef *result) {
+    NSDictionary* fixed = queryWithoutForeignGroup(query);
+    if(!fixed) {
+        OSStatus s = orig_SecItemCopyMatching(query, result);
+        diagLogStatus(@"SecItemCopyMatching", query, s, NO);
+        return s;
+    }
+    OSStatus s = orig_SecItemCopyMatching((__bridge CFDictionaryRef)fixed, result);
+    diagLogStatus(@"SecItemCopyMatching[已移除外來群組]", query, s, YES);
+    return s;
+}
+
+static OSStatus remap_SecItemUpdate(CFDictionaryRef query, CFDictionaryRef attributesToUpdate) {
+    NSDictionary* fixedQuery = queryWithoutForeignGroup(query);
+    NSDictionary* fixedAttrs = queryWithoutForeignGroup(attributesToUpdate);
+    if(!fixedQuery && !fixedAttrs) {
+        OSStatus s = orig_SecItemUpdate(query, attributesToUpdate);
+        diagLogStatus(@"SecItemUpdate", query, s, NO);
+        return s;
+    }
+    OSStatus s = orig_SecItemUpdate(fixedQuery ? (__bridge CFDictionaryRef)fixedQuery : query,
+                                    fixedAttrs ? (__bridge CFDictionaryRef)fixedAttrs : attributesToUpdate);
+    diagLogStatus(@"SecItemUpdate[已移除外來群組]", query, s, YES);
+    return s;
+}
+
+static OSStatus remap_SecItemDelete(CFDictionaryRef query) {
+    NSDictionary* fixed = queryWithoutForeignGroup(query);
+    if(!fixed) {
+        OSStatus s = orig_SecItemDelete(query);
+        diagLogStatus(@"SecItemDelete", query, s, NO);
+        return s;
+    }
+    OSStatus s = orig_SecItemDelete((__bridge CFDictionaryRef)fixed);
+    diagLogStatus(@"SecItemDelete[已移除外來群組]", query, s, YES);
+    return s;
+}
+
+static SecKeyRef remap_SecKeyCreateRandomKey(CFDictionaryRef parameters, CFErrorRef *error) {
+    NSDictionary* fixed = queryWithoutForeignGroup(parameters);
+    if(!fixed) {
+        SecKeyRef k = orig_SecKeyCreateRandomKey(parameters, error);
+        diagLogKey(@"SecKeyCreateRandomKey", parameters, k != NULL, (error ? *error : NULL), NO);
+        return k;
+    }
+    SecKeyRef k = orig_SecKeyCreateRandomKey((__bridge CFDictionaryRef)fixed, error);
+    diagLogKey(@"SecKeyCreateRandomKey[已移除外來群組]", parameters, k != NULL, (error ? *error : NULL), YES);
+    return k;
+}
+
+static SecKeyRef remap_SecKeyCreateWithData(CFDataRef keyData, CFDictionaryRef parameters, CFErrorRef *error) {
+    NSDictionary* fixed = queryWithoutForeignGroup(parameters);
+    if(!fixed) {
+        SecKeyRef k = orig_SecKeyCreateWithData(keyData, parameters, error);
+        diagLogKey(@"SecKeyCreateWithData", parameters, k != NULL, (error ? *error : NULL), NO);
+        return k;
+    }
+    SecKeyRef k = orig_SecKeyCreateWithData(keyData, (__bridge CFDictionaryRef)fixed, error);
+    diagLogKey(@"SecKeyCreateWithData[已移除外來群組]", parameters, k != NULL, (error ? *error : NULL), YES);
+    return k;
+}
+
+static OSStatus remap_SecKeyGeneratePair(CFDictionaryRef parameters, SecKeyRef *publicKey, SecKeyRef *privateKey) {
+    NSDictionary* fixed = queryWithoutForeignGroup(parameters);
+    if(!fixed) {
+        OSStatus s = orig_SecKeyGeneratePair(parameters, publicKey, privateKey);
+        diagLogStatus(@"SecKeyGeneratePair", parameters, s, NO);
+        return s;
+    }
+    OSStatus s = orig_SecKeyGeneratePair((__bridge CFDictionaryRef)fixed, publicKey, privateKey);
+    diagLogStatus(@"SecKeyGeneratePair[已移除外來群組]", parameters, s, YES);
+    return s;
+}
+
 // 開啟診斷時建立 log 檔並寫入環境摘要。回傳是否成功啟用。
 // 診斷開關容錯讀取：任一來源為開即啟用。設定值原本寫在主程式自己的偏好設定中，
 // 修正後改寫入 App Group，兩處都要認得，才不會因為存放位置變更而失效。
@@ -372,6 +485,27 @@ static void installDiagOnlyHooks(void) {
     diagWrite(@"已掛上純記錄 hook，以下為 guest app 實際的鑰匙圈操作");
 }
 
+// 掛上會移除外來 access group 的 hook（同時保留記錄）。
+static void installRemapHooks(void) {
+    NSString* team = [LCSharedUtils teamIdentifier];
+    if(team.length == 0) {
+        // 取不到團隊識別碼就無從判斷群組歸屬，此時不做任何改寫，退回純記錄
+        diagWrite(@"無法取得團隊識別碼，改用純記錄 hook");
+        installDiagOnlyHooks();
+        return;
+    }
+    gTeamPrefix = [team stringByAppendingString:@"."];
+
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemAdd, remap_SecItemAdd, nil);
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemCopyMatching, remap_SecItemCopyMatching, nil);
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemUpdate, remap_SecItemUpdate, nil);
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecItemDelete, remap_SecItemDelete, nil);
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateRandomKey, remap_SecKeyCreateRandomKey, nil);
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateWithData, remap_SecKeyCreateWithData, nil);
+    litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyGeneratePair, remap_SecKeyGeneratePair, nil);
+    diagWrite([NSString stringWithFormat:@"已掛上外來群組移除 hook，保留前綴為 %@ 的群組", gTeamPrefix]);
+}
+
 // 探測各種 access group 的可用性，供判斷可行的替代方案。
 // 「不指定 access group」使用的是系統配給本程式的預設群組，理論上必定可用；
 // 若探測結果顯示連它都不可用，代表問題不在群組權限。
@@ -418,8 +552,11 @@ void SecItemGuestHooksInit(void)  {
         NSLog(@"[LC] keychain isolation fully disabled by user setting");
         // 隔離關閉時原本完全不掛 hook。若使用者開了診斷，仍要掛上純記錄版本，
         // 否則「關閉隔離後為何還是失敗」這個情境永遠觀察不到。
-        if(diagSetup(NO)) {
-            probeAccessGroups();
+        BOOL diagOn = diagSetup(NO);
+        if(diagOn) probeAccessGroups();
+        if(![lcSettings() boolForKey:@"LCDisableKeychainGroupRemap"]) {
+            installRemapHooks();
+        } else if(diagOn) {
             installDiagOnlyHooks();
         }
         return;
@@ -450,9 +587,16 @@ void SecItemGuestHooksInit(void)  {
         // 此處原本直接返回、不安裝任何 hook。實測顯示這正是最常走到的路徑
         // （免費開發者帳號簽名時取不到自訂的 keychain access group），
         // 因此同樣要掛上純記錄的 hook，才看得到 guest app 實際的操作與回傳碼。
-        if(diagSetup(YES)) {
+        BOOL diagOn = diagSetup(YES);
+        if(diagOn) {
             diagWrite(@"!!! 容器專屬 access group 不可用（errSecMissingEntitlement），隔離 hook 未安裝");
             probeAccessGroups();
+        }
+        // 隔離無法生效時，guest app 的請求會原封不動送給系統。若其中寫死了
+        // 其他開發者帳號的 access group，必然失敗，因此改掛移除外來群組的 hook。
+        if(![lcSettings() boolForKey:@"LCDisableKeychainGroupRemap"]) {
+            installRemapHooks();
+        } else if(diagOn) {
             installDiagOnlyHooks();
         }
         return;

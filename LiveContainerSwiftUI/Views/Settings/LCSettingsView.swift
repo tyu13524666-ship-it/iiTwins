@@ -52,6 +52,8 @@ struct LCSettingsView: View {
     // App Group，兩邊才讀得到同一份值。
     @AppStorage("LCDisableKeychainIsolation", store: LCUtils.appGroupUserDefault) var disableKeychainIsolation = false
     @AppStorage("LCIsolateSecKeys", store: LCUtils.appGroupUserDefault) var isolateSecKeys = false
+    // 以「停用」為儲存值，讓未設定時（false）即為啟用狀態
+    @AppStorage("LCDisableKeychainGroupRemap", store: LCUtils.appGroupUserDefault) var disableKeychainGroupRemap = false
     @AppStorage("LCKeychainDiagnostics", store: LCUtils.appGroupUserDefault) var keychainDiagnostics = false
     @AppStorage("LCSwitchAppWithoutAsking") var silentSwitchApp = false
     @AppStorage("LCOpenWebPageWithoutAsking") var silentOpenWebPage = false
@@ -218,6 +220,15 @@ struct LCSettingsView: View {
                         Text("停用鑰匙圈隔離")
                     }
                     Text("預設會讓同一個 App 的不同容器各自使用獨立的鑰匙圈，以便分別登入不同帳號。若 App 出現解密失敗或登入狀態異常，可開啟此選項改用本程式的鑰匙圈，但屆時多個容器將共用同一份登入資料。\n\n⚠️ 切換此選項後，已登入的 App 會找不到原本存放的登入資料，很可能需要重新登入。請在切換前先確認重新登入不會造成困擾。")
+                        .font(.footnote)
+                        .foregroundStyle(.gray)
+                    Toggle(isOn: Binding(
+                        get: { !disableKeychainGroupRemap },
+                        set: { disableKeychainGroupRemap = !$0 }
+                    )) {
+                        Text("修正 App 指定的鑰匙圈群組")
+                    }
+                    Text("有些 App 會指定自家開發者帳號的鑰匙圈群組，在本程式中執行時必然無權存取，導致取不到金鑰而無法解密自己的資料（例如新版 LINE 登入後重開就失效）。開啟後會移除這類指定，改用系統配給本程式的群組。只影響指定了其他開發者帳號的 App，原本就正常的不受影響。")
                         .font(.footnote)
                         .foregroundStyle(.gray)
                     Toggle(isOn: $isolateSecKeys) {
