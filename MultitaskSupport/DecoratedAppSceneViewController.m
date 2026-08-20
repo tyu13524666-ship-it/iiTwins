@@ -604,17 +604,23 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
         settings.safeAreaInsetsPortrait = UIEdgeInsetsMake(settings.peripheryInsets.top, settings.peripheryInsets.left, settings.peripheryInsets.bottom, settings.peripheryInsets.right);
     }
     
+    // 將鍵盤遮住的高度併入安全區域的下緣，容器內的 app 便會把輸入列排在其上方。
+    // 放在最後處理，才不會被上方針對方向所做的換算覆蓋。
+    if(self.keyboardInset > 0) {
+        UIEdgeInsets withKeyboard = settings.safeAreaInsetsPortrait;
+        withKeyboard.bottom += self.keyboardInset / _scaleRatio;
+        settings.safeAreaInsetsPortrait = withKeyboard;
+    }
+
     safeAreaInsets.bottom = 0;
     return safeAreaInsets;
 }
 
 - (void)updateMaximizedFrameWithSettings:(UIMutableApplicationSceneSettings *)settings {
     CGRect maxFrame = UIEdgeInsetsInsetRect(self.view.window.frame, [self updateMaximizedSafeAreaWithSettings:settings]);
-    // 讓視窗底部停在鍵盤上方，容器內的 app 才會把輸入列排在看得見的位置
-    if(self.keyboardInset > 0) {
-        maxFrame.size.height -= self.keyboardInset;
-        if(maxFrame.size.height < 120) maxFrame.size.height = 120;
-    }
+    // 鍵盤的處理改以安全區域告知，不再更動視窗尺寸：實測顯示視窗雖然確實縮短，
+    // 容器內的 app 卻無法據此完成排版，畫面會留下大片空白。安全區域的變化是
+    // 每個 app 原本就會處理的情形，對其而言溫和得多。
     self.view.frame = maxFrame;
 }
 
@@ -675,7 +681,7 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
         [strongSelf.view layoutIfNeeded];
     } completion:nil];
 
-    LCKeyboardDiagLog(self.dataUUID, @"  已將視窗底部上移 %.1f（動畫 %.2fs 曲線 %ld）", overlap, duration, (long)curve);
+    LCKeyboardDiagLog(self.dataUUID, @"  已將安全區域下緣增加 %.1f（動畫 %.2fs 曲線 %ld）", overlap, duration, (long)curve);
 }
 
 - (void)dealloc {
