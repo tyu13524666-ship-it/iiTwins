@@ -20,10 +20,12 @@ private struct LaunchPriorityLC: Identifiable, Hashable {
     var id: String { scheme }
 }
 
+// 識別碼必須與 LCSharedUtils 的 lcUnorderedUrlSchemes 及 Info.plist 的可查詢
+// 清單一致，否則此處排定的順序不會被採用。顯示名稱另外標示連字號。
 private let knownLiveContainers = [
     LaunchPriorityLC(scheme: "iitwins", displayName: "iiTwins"),
-    LaunchPriorityLC(scheme: "iitwins-2", displayName: "iiTwins-2"),
-    LaunchPriorityLC(scheme: "iitwins-3", displayName: "iiTwins-3")
+    LaunchPriorityLC(scheme: "iitwins2", displayName: "iiTwins-2"),
+    LaunchPriorityLC(scheme: "iitwins3", displayName: "iiTwins-3")
 ]
 
 struct InstallAnotherLCButton : View {
