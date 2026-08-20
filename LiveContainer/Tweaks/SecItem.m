@@ -315,7 +315,7 @@ static OSStatus diag_SecKeyGeneratePair(CFDictionaryRef parameters, SecKeyRef *p
     return status;
 }
 
-#pragma mark - 權限不足時改寫重試的 hook
+#pragma mark - 改寫 access group 與項目名稱的 hook
 
 // 部分 app 會在鑰匙圈查詢中指定自家的 access group（例如新版 LINE 指定
 // ZW4U99SQQ3.jp.naver.line，亦有指定 <本團隊>.jp.naver.line 的情形）。以本
@@ -323,12 +323,15 @@ static OSStatus diag_SecKeyGeneratePair(CFDictionaryRef parameters, SecKeyRef *p
 // errSecMissingEntitlement，導致取不到金鑰而無法解密自身資料。
 //
 // 事先判斷「哪些群組可用」並不可靠：實測顯示連前綴屬於本團隊的群組也可能
-// 無權存取。因此改為以系統的回覆為準——先照原樣送出，只有在確實被拒時才
-// 移除群組指定並重試。原本就能成功的請求完全不經過改寫，不受任何影響。
+// 無權存取。而「僅在被拒時才改寫」同樣不可行——app 對同一個項目的不同操作
+// 未必都帶著群組指定（實測中 update 帶、add 不帶），只改寫其中一邊會讓同一
+// 個項目被拆成兩個名稱，造成 update 找不到、add 卻說重複的無窮迴圈。
 //
-// 移除群組後所有容器會落在同一個預設群組，項目彼此可見，因此重試時一併在
-// 名稱前加註容器識別碼。名稱是 app 自行決定的字串，不受權限限制，且僅有
-// 走進重試的項目會被加註，與未被改寫的項目天然分屬不同位置。
+// 因此一律改寫：移除群組指定，並在名稱前加註容器識別碼，使所有操作對應到
+// 同一個位置。名稱是 app 自行決定的字串，不受權限限制；加註容器識別碼同時
+// 讓各容器的項目自然分開，不會互相覆蓋。
+//
+// 若改寫後的參數不被系統接受（errSecParam），退回原樣重試一次以策安全。
 static NSString* gContainerTag = nil;
 
 static NSString* taggedName(NSString* original) {
@@ -369,132 +372,130 @@ static NSDictionary* rewrittenQuery(CFDictionaryRef dict) {
     return changed ? copy : nil;
 }
 
-static BOOL isMissingEntitlement(OSStatus s) {
-    return s == -34018;
-}
-
-static BOOL errorIsMissingEntitlement(CFErrorRef error) {
-    if(!error) return NO;
-    NSError* e = (__bridge NSError *)error;
-    return e.code == -34018;
-}
-
 static OSStatus remap_SecItemAdd(CFDictionaryRef attributes, CFTypeRef *result) {
-    OSStatus s = orig_SecItemAdd(attributes, result);
-    if(!isMissingEntitlement(s)) {
-        diagLogStatus(@"SecItemAdd", attributes, s, NO);
-        return s;
-    }
     NSDictionary* fixed = rewrittenQuery(attributes);
     if(!fixed) {
+        OSStatus s = orig_SecItemAdd(attributes, result);
         diagLogStatus(@"SecItemAdd", attributes, s, NO);
         return s;
     }
-    OSStatus retry = orig_SecItemAdd((__bridge CFDictionaryRef)fixed, result);
-    diagLogStatus(@"SecItemAdd[改寫重試]", attributes, retry, YES);
-    return retry;
+    OSStatus s = orig_SecItemAdd((__bridge CFDictionaryRef)fixed, result);
+    if(s == errSecParam) {
+        s = orig_SecItemAdd(attributes, result);
+        diagLogStatus(@"SecItemAdd[改寫不受支援，退回原樣]", attributes, s, NO);
+        return s;
+    }
+    diagLogStatus(@"SecItemAdd[已改寫]", attributes, s, YES);
+    return s;
 }
 
 static OSStatus remap_SecItemCopyMatching(CFDictionaryRef query, CFTypeRef *result) {
-    OSStatus s = orig_SecItemCopyMatching(query, result);
-    if(!isMissingEntitlement(s)) {
-        diagLogStatus(@"SecItemCopyMatching", query, s, NO);
-        return s;
-    }
     NSDictionary* fixed = rewrittenQuery(query);
     if(!fixed) {
+        OSStatus s = orig_SecItemCopyMatching(query, result);
         diagLogStatus(@"SecItemCopyMatching", query, s, NO);
         return s;
     }
-    OSStatus retry = orig_SecItemCopyMatching((__bridge CFDictionaryRef)fixed, result);
-    diagLogStatus(@"SecItemCopyMatching[改寫重試]", query, retry, YES);
-    return retry;
+    OSStatus s = orig_SecItemCopyMatching((__bridge CFDictionaryRef)fixed, result);
+    if(s == errSecParam) {
+        s = orig_SecItemCopyMatching(query, result);
+        diagLogStatus(@"SecItemCopyMatching[改寫不受支援，退回原樣]", query, s, NO);
+        return s;
+    }
+    diagLogStatus(@"SecItemCopyMatching[已改寫]", query, s, YES);
+    return s;
 }
 
 static OSStatus remap_SecItemUpdate(CFDictionaryRef query, CFDictionaryRef attributesToUpdate) {
-    OSStatus s = orig_SecItemUpdate(query, attributesToUpdate);
-    if(!isMissingEntitlement(s)) {
-        diagLogStatus(@"SecItemUpdate", query, s, NO);
-        return s;
-    }
     NSDictionary* fixedQuery = rewrittenQuery(query);
     NSDictionary* fixedAttrs = rewrittenQuery(attributesToUpdate);
     if(!fixedQuery && !fixedAttrs) {
+        OSStatus s = orig_SecItemUpdate(query, attributesToUpdate);
         diagLogStatus(@"SecItemUpdate", query, s, NO);
         return s;
     }
-    OSStatus retry = orig_SecItemUpdate(fixedQuery ? (__bridge CFDictionaryRef)fixedQuery : query,
-                                        fixedAttrs ? (__bridge CFDictionaryRef)fixedAttrs : attributesToUpdate);
-    diagLogStatus(@"SecItemUpdate[改寫重試]", query, retry, YES);
-    return retry;
+    OSStatus s = orig_SecItemUpdate(fixedQuery ? (__bridge CFDictionaryRef)fixedQuery : query,
+                                    fixedAttrs ? (__bridge CFDictionaryRef)fixedAttrs : attributesToUpdate);
+    if(s == errSecParam) {
+        s = orig_SecItemUpdate(query, attributesToUpdate);
+        diagLogStatus(@"SecItemUpdate[改寫不受支援，退回原樣]", query, s, NO);
+        return s;
+    }
+    diagLogStatus(@"SecItemUpdate[已改寫]", query, s, YES);
+    return s;
 }
 
 static OSStatus remap_SecItemDelete(CFDictionaryRef query) {
-    OSStatus s = orig_SecItemDelete(query);
-    if(!isMissingEntitlement(s)) {
-        diagLogStatus(@"SecItemDelete", query, s, NO);
-        return s;
-    }
     NSDictionary* fixed = rewrittenQuery(query);
     if(!fixed) {
+        OSStatus s = orig_SecItemDelete(query);
         diagLogStatus(@"SecItemDelete", query, s, NO);
         return s;
     }
-    OSStatus retry = orig_SecItemDelete((__bridge CFDictionaryRef)fixed);
-    diagLogStatus(@"SecItemDelete[改寫重試]", query, retry, YES);
-    return retry;
+    OSStatus s = orig_SecItemDelete((__bridge CFDictionaryRef)fixed);
+    if(s == errSecParam) {
+        s = orig_SecItemDelete(query);
+        diagLogStatus(@"SecItemDelete[改寫不受支援，退回原樣]", query, s, NO);
+        return s;
+    }
+    diagLogStatus(@"SecItemDelete[已改寫]", query, s, YES);
+    return s;
 }
 
 static SecKeyRef remap_SecKeyCreateRandomKey(CFDictionaryRef parameters, CFErrorRef *error) {
-    SecKeyRef key = orig_SecKeyCreateRandomKey(parameters, error);
-    if(key || !error || !errorIsMissingEntitlement(*error)) {
-        diagLogKey(@"SecKeyCreateRandomKey", parameters, key != NULL, (error ? *error : NULL), NO);
-        return key;
-    }
     NSDictionary* fixed = rewrittenQuery(parameters);
     if(!fixed) {
-        diagLogKey(@"SecKeyCreateRandomKey", parameters, NO, *error, NO);
+        SecKeyRef k = orig_SecKeyCreateRandomKey(parameters, error);
+        diagLogKey(@"SecKeyCreateRandomKey", parameters, k != NULL, (error ? *error : NULL), NO);
+        return k;
+    }
+    SecKeyRef key = orig_SecKeyCreateRandomKey((__bridge CFDictionaryRef)fixed, error);
+    if(!key && error && *error) {
+        // 改寫後的參數若不被接受，退回原樣再試一次
+        CFRelease(*error);
+        *error = NULL;
+        key = orig_SecKeyCreateRandomKey(parameters, error);
+        diagLogKey(@"SecKeyCreateRandomKey[改寫失敗，退回原樣]", parameters, key != NULL, (error ? *error : NULL), NO);
         return key;
     }
-    CFRelease(*error);
-    *error = NULL;
-    key = orig_SecKeyCreateRandomKey((__bridge CFDictionaryRef)fixed, error);
-    diagLogKey(@"SecKeyCreateRandomKey[改寫重試]", parameters, key != NULL, *error, YES);
+    diagLogKey(@"SecKeyCreateRandomKey[已改寫]", parameters, key != NULL, NULL, YES);
     return key;
 }
 
 static SecKeyRef remap_SecKeyCreateWithData(CFDataRef keyData, CFDictionaryRef parameters, CFErrorRef *error) {
-    SecKeyRef key = orig_SecKeyCreateWithData(keyData, parameters, error);
-    if(key || !error || !errorIsMissingEntitlement(*error)) {
-        diagLogKey(@"SecKeyCreateWithData", parameters, key != NULL, (error ? *error : NULL), NO);
-        return key;
-    }
     NSDictionary* fixed = rewrittenQuery(parameters);
     if(!fixed) {
-        diagLogKey(@"SecKeyCreateWithData", parameters, NO, *error, NO);
+        SecKeyRef k = orig_SecKeyCreateWithData(keyData, parameters, error);
+        diagLogKey(@"SecKeyCreateWithData", parameters, k != NULL, (error ? *error : NULL), NO);
+        return k;
+    }
+    SecKeyRef key = orig_SecKeyCreateWithData(keyData, (__bridge CFDictionaryRef)fixed, error);
+    if(!key && error && *error) {
+        CFRelease(*error);
+        *error = NULL;
+        key = orig_SecKeyCreateWithData(keyData, parameters, error);
+        diagLogKey(@"SecKeyCreateWithData[改寫失敗，退回原樣]", parameters, key != NULL, (error ? *error : NULL), NO);
         return key;
     }
-    CFRelease(*error);
-    *error = NULL;
-    key = orig_SecKeyCreateWithData(keyData, (__bridge CFDictionaryRef)fixed, error);
-    diagLogKey(@"SecKeyCreateWithData[改寫重試]", parameters, key != NULL, *error, YES);
+    diagLogKey(@"SecKeyCreateWithData[已改寫]", parameters, key != NULL, NULL, YES);
     return key;
 }
 
 static OSStatus remap_SecKeyGeneratePair(CFDictionaryRef parameters, SecKeyRef *publicKey, SecKeyRef *privateKey) {
-    OSStatus s = orig_SecKeyGeneratePair(parameters, publicKey, privateKey);
-    if(!isMissingEntitlement(s)) {
-        diagLogStatus(@"SecKeyGeneratePair", parameters, s, NO);
-        return s;
-    }
     NSDictionary* fixed = rewrittenQuery(parameters);
     if(!fixed) {
+        OSStatus s = orig_SecKeyGeneratePair(parameters, publicKey, privateKey);
         diagLogStatus(@"SecKeyGeneratePair", parameters, s, NO);
         return s;
     }
-    OSStatus retry = orig_SecKeyGeneratePair((__bridge CFDictionaryRef)fixed, publicKey, privateKey);
-    diagLogStatus(@"SecKeyGeneratePair[改寫重試]", parameters, retry, YES);
-    return retry;
+    OSStatus s = orig_SecKeyGeneratePair((__bridge CFDictionaryRef)fixed, publicKey, privateKey);
+    if(s == errSecParam) {
+        s = orig_SecKeyGeneratePair(parameters, publicKey, privateKey);
+        diagLogStatus(@"SecKeyGeneratePair[改寫不受支援，退回原樣]", parameters, s, NO);
+        return s;
+    }
+    diagLogStatus(@"SecKeyGeneratePair[已改寫]", parameters, s, YES);
+    return s;
 }
 
 // 開啟診斷時建立 log 檔並寫入環境摘要。回傳是否成功啟用。
@@ -554,7 +555,7 @@ static void installDiagOnlyHooks(void) {
     diagWrite(@"已掛上純記錄 hook，以下為 guest app 實際的鑰匙圈操作");
 }
 
-// 掛上「權限不足才改寫重試」的 hook（同時保留記錄）。
+// 掛上會改寫 access group 與項目名稱的 hook（同時保留記錄）。
 static void installRemapHooks(void) {
     // 容器識別碼取自 guest app 的資料目錄名稱，各容器天然唯一。
     const char* home = getenv("HOME");
@@ -574,7 +575,7 @@ static void installRemapHooks(void) {
     litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateRandomKey, remap_SecKeyCreateRandomKey, nil);
     litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyCreateWithData, remap_SecKeyCreateWithData, nil);
     litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, SecKeyGeneratePair, remap_SecKeyGeneratePair, nil);
-    diagWrite([NSString stringWithFormat:@"已掛上改寫重試 hook（僅在權限不足時生效）；容器識別碼=%@",
+    diagWrite([NSString stringWithFormat:@"已掛上改寫 hook（移除群組指定並加註容器識別碼）；容器識別碼=%@",
                gContainerTag ?: @"(無，不做區隔)"]);
 }
 
