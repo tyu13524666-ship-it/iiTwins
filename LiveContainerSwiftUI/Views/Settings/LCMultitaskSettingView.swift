@@ -21,6 +21,7 @@ struct LCMultitaskSettingView: View {
     @AppStorage("LCRedirectURLToHost", store: LCUtils.appGroupUserDefault) var redirectURLToHost = false
     // 以「停用」為儲存值，未設定時即為啟用
     @AppStorage("LCDisableKeyboardAvoidance", store: LCUtils.appGroupUserDefault) var disableKeyboardAvoidance = false
+    @AppStorage("LCDisableAudioRelay", store: LCUtils.appGroupUserDefault) var disableAudioRelay = false
     
     var body: some View {
         List {
@@ -64,6 +65,15 @@ struct LCMultitaskSettingView: View {
                         Text("鍵盤彈出時縮短視窗")
                     }
                     Text("系統回報的鍵盤位置是以整個螢幕為準，而視窗有自己的座標，容器內的 App 依此自行避讓時會算錯，輸入列因而被推到看不見的地方。開啟後改由視窗端量出鍵盤實際遮住的高度，直接把視窗底部縮到鍵盤上方。僅在全螢幕視窗時生效。")
+                        .font(.footnote)
+                        .foregroundStyle(.gray)
+                    Toggle(isOn: Binding(
+                        get: { !disableAudioRelay },
+                        set: { disableAudioRelay = !$0 }
+                    )) {
+                        Text("代替 App 錄音")
+                    }
+                    Text("多工視窗裡的 App 由系統當成擴充功能執行，取不到麥克風，錄音與錄影都會停在 0 秒。開啟後，只有在系統確實拒絕錄音時，才改由本程式錄下同一段聲音再交還給 App，全螢幕執行時完全不經過此處。錄音期間本程式必須留在前景。")
                         .font(.footnote)
                         .foregroundStyle(.gray)
                     Toggle(isOn: $redirectURLToHost) {

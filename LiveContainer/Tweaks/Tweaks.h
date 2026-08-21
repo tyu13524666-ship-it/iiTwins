@@ -18,6 +18,7 @@ void IDFVHookInit(NSUUID* uuid);
 void SiriBypassHookInit(void);
 void KeyboardRelayoutHookInit(void);
 void AudioDiagHookInit(void);
+void AudioRelayHookInit(void);
 
 @interface NSBundle(LiveContainer)
 - (instancetype)initWithPathForMainBundle:(NSString *)path;

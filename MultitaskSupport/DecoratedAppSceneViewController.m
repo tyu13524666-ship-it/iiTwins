@@ -7,6 +7,179 @@
 #import "VirtualWindowsHostView.h"
 #import "../LiveContainer/Localization.h"
 #import "utils.h"
+#import "../LiveContainer/LCSharedUtils.h"
+@import AVFoundation;
+
+#pragma mark - 錄音代理
+
+//  多工模式下 guest app 跑在擴充功能中，系統不給麥克風：音訊類別設得起來、
+//  工作階段啟用得了、權限也顯示已授權，但 AVAudioRecorder 的 record 一律回
+//  失敗且不附錯誤。主程式本身不受此限，因此改由主程式代為錄音。
+//
+//  分工：guest app 端攔下錄音呼叫，把格式設定寫進 App Group 後發出通知；
+//  此處負責實際錄製，把成品與狀態同樣放在 App Group 供對方取回。兩邊只靠
+//  檔案與通知溝通，不共用任何物件。
+
+@interface LCAudioRelay : NSObject
++ (void)startListening;
+@end
+
+// 與 guest app 端共用的通知名稱與檔案配置，兩邊必須一致。
+static NSString* const kStartNotification = @"com.tyu.iitwins.audio.start";
+static NSString* const kStopNotification  = @"com.tyu.iitwins.audio.stop";
+
+static NSString* relayDirectory(void) {
+    NSURL* group = [LCSharedUtils appGroupPath];
+    if(!group) return nil;
+    NSString* dir = [group.path stringByAppendingPathComponent:@"AudioRelay"];
+    [NSFileManager.defaultManager createDirectoryAtPath:dir
+                          withIntermediateDirectories:YES
+                                           attributes:nil
+                                                error:nil];
+    return dir;
+}
+
+static NSString* relayPath(NSString* name) {
+    NSString* dir = relayDirectory();
+    return dir ? [dir stringByAppendingPathComponent:name] : nil;
+}
+
+@interface LCAudioRelay ()
+@property(nonatomic, strong) AVAudioRecorder* recorder;
+@property(nonatomic, strong) NSTimer* meterTimer;
++ (instancetype)shared;
+- (void)handleStart;
+- (void)handleStopKeepingState:(BOOL)keepingState;
+@end
+
+@implementation LCAudioRelay
+
++ (instancetype)shared {
+    static LCAudioRelay* instance = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ instance = [LCAudioRelay new]; });
+    return instance;
+}
+
+#pragma mark - 狀態回報
+
+// guest app 端會輪詢這份狀態來得知進度，因此每次轉換都要寫入。
+- (void)writeState:(NSString*)state extra:(NSDictionary*)extra {
+    NSString* path = relayPath(@"state.plist");
+    if(!path) return;
+    NSMutableDictionary* dict = [@{@"state": state} mutableCopy];
+    [dict addEntriesFromDictionary:extra ?: @{}];
+    [dict writeToURL:[NSURL fileURLWithPath:path] error:nil];
+}
+
+#pragma mark - 錄製
+
+- (void)handleStart {
+    [self handleStopKeepingState:YES];
+
+    NSString* settingsPath = relayPath(@"settings.plist");
+    NSString* outputPath = relayPath(@"out.m4a");
+    if(!settingsPath || !outputPath) return;
+
+    NSDictionary* requested = [NSDictionary dictionaryWithContentsOfURL:[NSURL fileURLWithPath:settingsPath]];
+    // guest app 的設定以 AVAudioRecorder 的鍵名寫入；缺漏時退回一組通用值，
+    // 寧可錄得到而格式稍有出入，也不要因為少一個鍵就完全錄不成。
+    NSMutableDictionary* settings = [@{
+        AVFormatIDKey:           @(kAudioFormatMPEG4AAC),
+        AVSampleRateKey:         @44100.0,
+        AVNumberOfChannelsKey:   @1,
+    } mutableCopy];
+    [settings addEntriesFromDictionary:requested ?: @{}];
+
+    [NSFileManager.defaultManager removeItemAtPath:outputPath error:nil];
+
+    NSError* error = nil;
+    AVAudioSession* session = AVAudioSession.sharedInstance;
+    if(![session setCategory:AVAudioSessionCategoryPlayAndRecord
+                        mode:AVAudioSessionModeDefault
+                     options:AVAudioSessionCategoryOptionDefaultToSpeaker |
+                             AVAudioSessionCategoryOptionAllowBluetooth
+                       error:&error] ||
+       ![session setActive:YES error:&error]) {
+        [self writeState:@"failed" extra:@{@"error": error.localizedDescription ?: @"無法啟用音訊工作階段"}];
+        return;
+    }
+
+    AVAudioRecorder* recorder = [[AVAudioRecorder alloc] initWithURL:[NSURL fileURLWithPath:outputPath]
+                                                            settings:settings
+                                                               error:&error];
+    if(!recorder || ![recorder prepareToRecord] || ![recorder record]) {
+        [self writeState:@"failed" extra:@{@"error": error.localizedDescription ?: @"無法開始錄音"}];
+        return;
+    }
+
+    recorder.meteringEnabled = YES;
+    self.recorder = recorder;
+    [self writeState:@"recording" extra:nil];
+
+    // guest app 端的錄音介面多半會顯示音量起伏，定期把音量寫出去供其取用。
+    self.meterTimer = [NSTimer scheduledTimerWithTimeInterval:0.1 repeats:YES block:^(NSTimer* timer) {
+        AVAudioRecorder* current = self.recorder;
+        if(!current.isRecording) return;
+        [current updateMeters];
+        [self writeState:@"recording" extra:@{
+            @"averagePower": @([current averagePowerForChannel:0]),
+            @"peakPower":    @([current peakPowerForChannel:0]),
+        }];
+    }];
+}
+
+// keepingState 用於開始新的一輪錄音前的清場，此時不必回報「已完成」，
+// 否則會把上一輪的結束狀態誤傳給正在等待的這一輪。
+- (void)handleStopKeepingState:(BOOL)keepingState {
+    [self.meterTimer invalidate];
+    self.meterTimer = nil;
+
+    AVAudioRecorder* recorder = self.recorder;
+    if(!recorder) return;
+    self.recorder = nil;
+
+    [recorder stop];
+    [AVAudioSession.sharedInstance setActive:NO
+                                 withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
+                                       error:nil];
+    if(keepingState) return;
+
+    NSString* outputPath = relayPath(@"out.m4a");
+    NSNumber* size = nil;
+    [[NSURL fileURLWithPath:outputPath] getResourceValue:&size forKey:NSURLFileSizeKey error:nil];
+    [self writeState:@"done" extra:@{@"size": size ?: @0}];
+}
+
+#pragma mark - 監聽
+
+static void relayCallback(CFNotificationCenterRef center, void* observer,
+                          CFStringRef name, const void* object, CFDictionaryRef userInfo) {
+    BOOL isStart = [(__bridge NSString *)name isEqualToString:kStartNotification];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if(isStart) {
+            [LCAudioRelay.shared handleStart];
+        } else {
+            [LCAudioRelay.shared handleStopKeepingState:NO];
+        }
+    });
+}
+
++ (void)startListening {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        CFNotificationCenterRef center = CFNotificationCenterGetDarwinNotifyCenter();
+        CFNotificationCenterAddObserver(center, NULL, relayCallback,
+                                        (__bridge CFStringRef)kStartNotification, NULL,
+                                        CFNotificationSuspensionBehaviorDeliverImmediately);
+        CFNotificationCenterAddObserver(center, NULL, relayCallback,
+                                        (__bridge CFStringRef)kStopNotification, NULL,
+                                        CFNotificationSuspensionBehaviorDeliverImmediately);
+    });
+}
+
+@end
+
 
 @interface DecoratedAppSceneViewController()
 @property(nonatomic) NSArray* activatedVerticalConstraints;
@@ -72,6 +245,9 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
                                                name:UIKeyboardWillChangeFrameNotification
                                              object:nil];
     LCKeyboardDiagLog(dataUUID, @"===== 視窗建立 %@ 最大化=%d =====", windowName, _isMaximized);
+
+    // 視窗內的 app 跑在擴充功能中，系統不給它麥克風。開始待命，必要時代為錄音。
+    [LCAudioRelay startListening];
     
     [MultitaskDockManager.shared addRunningApp:windowName appUUID:dataUUID view:self.view];
     

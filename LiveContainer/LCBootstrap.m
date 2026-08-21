@@ -530,6 +530,7 @@ static NSString* invokeAppMain(NSString *selectedApp, NSString *selectedContaine
         NSURLSCGuestHooksInit();
         // 多工模式下視窗會隨鍵盤縮短，需要促使 guest app 重新排版
         KeyboardRelayoutHookInit();
+        AudioRelayHookInit();
     }
     // ignore setting handler from guest app
     litehook_rebind_symbol(LITEHOOK_REBIND_GLOBAL, NSSetUncaughtExceptionHandler, hook_do_nothing, nil);
