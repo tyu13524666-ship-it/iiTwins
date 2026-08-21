@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import UserNotifications
+import AVFoundation
 
 enum JITEnablerType : Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
@@ -67,6 +68,10 @@ struct LCSettingsView: View {
     @AppStorage("LCJITEnablerType", store: LCUtils.appGroupUserDefault) var JITEnabler: JITEnablerType = .SideJITServer
     
     @State var store : Store = .Unknown
+
+    // 主程式端的錄音自測結果。容器內的 app 在多工模式下取不到麥克風，
+    // 需要先確認主程式本身錄得到，才知道把錄音交給主程式代勞是否可行。
+    @State var audioProbeResult : String = ""
     
     @AppStorage("LCLoadTweaksToSelf") var injectToLCItelf = false
     @AppStorage("LCIgnoreJITOnLaunch") var ignoreJITOnLaunch = false
@@ -230,6 +235,16 @@ struct LCSettingsView: View {
                         .foregroundStyle(.gray)
                     Toggle(isOn: $keychainDiagnostics) {
                         Text("記錄診斷日誌")
+                    }
+                    Button {
+                        probeHostRecording()
+                    } label: {
+                        Text("測試本程式能否錄音")
+                    }
+                    if !audioProbeResult.isEmpty {
+                        Text(audioProbeResult)
+                            .font(.footnote)
+                            .foregroundStyle(.gray)
                     }
                     Text("記錄容器內 App 存取鑰匙圈與金鑰的結果，以及鍵盤位置的計算過程，用來查明加密或版面異常的原因。日誌只含操作名稱、錯誤碼與尺寸數值，不含密碼或金鑰內容，存放於容器的 Documents 之下（LCKeychainDiag.log 與 LCKeyboardDiag.log）。平時請保持關閉，會拖慢速度並持續佔用空間。")
                         .font(.footnote)
@@ -463,6 +478,81 @@ struct LCSettingsView: View {
         }
     }
     
+    // 在主程式自己的進程裡實際錄一小段，判斷麥克風取不取得到。
+    // 多工模式下 app 跑在擴充功能中，系統不給麥克風；若主程式這裡錄得起來，
+    // 就有機會把容器內 app 的錄音轉由主程式代勞。
+    func probeHostRecording() {
+        audioProbeResult = "測試中…"
+
+        let start = {
+            let session = AVAudioSession.sharedInstance()
+            do {
+                try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+                try session.setActive(true)
+            } catch {
+                audioProbeResult = "無法啟用音訊工作階段：\(error.localizedDescription)"
+                return
+            }
+
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("lc_host_recording_probe.m4a")
+            try? FileManager.default.removeItem(at: url)
+
+            let settings: [String: Any] = [
+                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+                AVSampleRateKey: 44100.0,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue,
+            ]
+
+            let recorder: AVAudioRecorder
+            do {
+                recorder = try AVAudioRecorder(url: url, settings: settings)
+            } catch {
+                audioProbeResult = "無法建立錄音器：\(error.localizedDescription)"
+                return
+            }
+
+            guard recorder.prepareToRecord() else {
+                audioProbeResult = "錄音器準備失敗（寫入位置有問題）"
+                return
+            }
+            guard recorder.record() else {
+                audioProbeResult = "✗ 開始錄音被拒絕。主程式本身也錄不到，代表不是擴充功能的限制。"
+                return
+            }
+
+            audioProbeResult = "錄音中，請說句話…"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                recorder.stop()
+                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                try? session.setActive(false)
+                if size > 2000 {
+                    audioProbeResult = "✓ 主程式錄得到（1.5 秒 \(size) 位元組）。多工模式的錄音可以交給主程式代勞。"
+                } else {
+                    audioProbeResult = "△ 錄音有開始，但幾乎沒收到聲音（僅 \(size) 位元組）。"
+                }
+            }
+        }
+
+        switch AVAudioSession.sharedInstance().recordPermission {
+        case .granted:
+            start()
+        case .denied:
+            audioProbeResult = "麥克風權限被拒絕，請到「設定 → 隱私權與安全性 → 麥克風」開啟。"
+        default:
+            AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        start()
+                    } else {
+                        audioProbeResult = "麥克風權限未授予。"
+                    }
+                }
+            }
+        }
+    }
+
     func clearNotifications() {
         let notificationCenter = UNUserNotificationCenter.current()
         notificationCenter.removeAllDeliveredNotifications()
