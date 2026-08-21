@@ -7,11 +7,11 @@
 //  成功啟用、系統回報有內建麥克風可用。實際失敗的是 AVAudioRecorder 的
 //  record，它直接回傳 NO 而未提供任何錯誤。
 //
-//  record 回傳 NO 只有兩種來源：寫入目的地不可用，或系統不允許此進程取得
-//  麥克風輸入。多工模式下 app 跑在 extension 中，後者確有可能。此處在 app
-//  自己的錄音失敗當下，立即以確定可寫的位置自行錄一次作為對照，藉此分辨兩者。
+//  後續以對照組確認：即使改在確定可寫的位置、用最單純的設定錄音，一樣被拒，
+//  可見與寫入目的地無關，而是擴充功能取不到麥克風。對照組已完成任務並移除，
+//  改由 AudioRelay 請主程式代錄。
 //
-//  僅記錄與自測，不改變 app 的行為。
+//  此處僅記錄，不改變 app 的行為。
 //
 @import UIKit;
 @import AVFoundation;
@@ -80,53 +80,6 @@ static NSString* describeDirectory(NSURL* url) {
     BOOL exists = [fm fileExistsAtPath:dir isDirectory:&isDir];
     return [NSString stringWithFormat:@"%@（存在=%d 是目錄=%d 可寫=%d）",
             dir, (int)exists, (int)isDir, (int)[fm isWritableFileAtPath:dir]];
-}
-
-#pragma mark - 對照組自測
-
-// 在 app 錄音失敗的同一刻，以同樣的方式寫到確定可寫的位置。若這裡也失敗，
-// 表示此進程根本取不到麥克風輸入；若成功，則問題出在 app 選用的寫入位置。
-static void audioSelfTest(void) {
-    // 自測本身會呼叫 record，失敗時會再繞回這裡。此處不能用 dispatch_once，
-    // 那會在同一執行緒重入時卡死；改用單純的旗標，在呼叫前就先立起來。
-    static BOOL done = NO;
-    if(done) return;
-    done = YES;
-
-    @autoreleasepool {
-        const char* home = getenv("HOME");
-        if(!home) return;
-        NSString* dir = [[NSString stringWithUTF8String:home] stringByAppendingPathComponent:@"Documents"];
-        NSURL* url = [NSURL fileURLWithPath:[dir stringByAppendingPathComponent:@"lc_audio_selftest.m4a"]];
-        [NSFileManager.defaultManager removeItemAtURL:url error:nil];
-
-        NSDictionary* settings = @{
-            AVFormatIDKey:            @(kAudioFormatMPEG4AAC),
-            AVSampleRateKey:          @44100.0,
-            AVNumberOfChannelsKey:    @1,
-            AVEncoderAudioQualityKey: @(AVAudioQualityMedium),
-        };
-        NSError* error = nil;
-        AVAudioRecorder* recorder = [[AVAudioRecorder alloc] initWithURL:url settings:settings error:&error];
-        if(!recorder) {
-            audioLog(@"[自測] 無法建立錄音器：%@", error);
-            return;
-        }
-        BOOL prepared = [recorder prepareToRecord];
-        BOOL started = [recorder record];
-        audioLog(@"[自測] 寫入自己的 Documents：prepare=%d record=%d", (int)prepared, (int)started);
-        if(!started) {
-            audioLog(@"[自測] 連確定可寫的位置都無法開始錄音，問題不在寫入路徑");
-            return;
-        }
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            [recorder stop];
-            NSNumber* size = nil;
-            [url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];
-            audioLog(@"[自測] 錄 1.2 秒後停止，檔案大小=%@ 位元組（數千以上才是真的收到聲音）", size ?: @"(讀不到)");
-        });
-    }
 }
 
 #pragma mark - AVAudioSession
@@ -209,7 +162,6 @@ static NSString* session_inputsDescription(AVAudioSession* session) {
         audioLog(@"  麥克風擷取授權=%@",
                  authorizationName([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio]));
         audioLog(@"  目的地目錄 %@", describeDirectory(self.url));
-        audioSelfTest();
     }
     return ok;
 }

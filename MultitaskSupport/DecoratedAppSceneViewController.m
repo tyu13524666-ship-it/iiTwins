@@ -47,6 +47,8 @@ static NSString* relayPath(NSString* name) {
 @interface LCAudioRelay ()
 @property(nonatomic, strong) AVAudioRecorder* recorder;
 @property(nonatomic, strong) NSTimer* meterTimer;
+// guest app 端為每次代錄產生的識別碼，成品與狀態都以它命名。
+@property(nonatomic, copy) NSString* sessionID;
 + (instancetype)shared;
 - (void)handleStart;
 - (void)handleStopKeepingState:(BOOL)keepingState;
@@ -65,7 +67,8 @@ static NSString* relayPath(NSString* name) {
 
 // guest app 端會輪詢這份狀態來得知進度，因此每次轉換都要寫入。
 - (void)writeState:(NSString*)state extra:(NSDictionary*)extra {
-    NSString* path = relayPath(@"state.plist");
+    if(!self.sessionID) return;
+    NSString* path = relayPath([NSString stringWithFormat:@"state_%@.plist", self.sessionID]);
     if(!path) return;
     NSMutableDictionary* dict = [@{@"state": state} mutableCopy];
     [dict addEntriesFromDictionary:extra ?: @{}];
@@ -77,11 +80,17 @@ static NSString* relayPath(NSString* name) {
 - (void)handleStart {
     [self handleStopKeepingState:YES];
 
-    NSString* settingsPath = relayPath(@"settings.plist");
-    NSString* outputPath = relayPath(@"out.m4a");
-    if(!settingsPath || !outputPath) return;
+    NSString* requestPath = relayPath(@"request.plist");
+    if(!requestPath) return;
+    NSDictionary* request = [NSDictionary dictionaryWithContentsOfURL:[NSURL fileURLWithPath:requestPath]];
+    NSString* sessionID = request[@"sessionID"];
+    if(!sessionID) return;
+    self.sessionID = sessionID;
 
-    NSDictionary* requested = [NSDictionary dictionaryWithContentsOfURL:[NSURL fileURLWithPath:settingsPath]];
+    NSString* outputPath = relayPath([NSString stringWithFormat:@"out_%@.m4a", sessionID]);
+    if(!outputPath) return;
+
+    NSDictionary* requested = request[@"settings"];
     // guest app 的設定以 AVAudioRecorder 的鍵名寫入；缺漏時退回一組通用值，
     // 寧可錄得到而格式稍有出入，也不要因為少一個鍵就完全錄不成。
     NSMutableDictionary* settings = [@{
@@ -139,16 +148,19 @@ static NSString* relayPath(NSString* name) {
     if(!recorder) return;
     self.recorder = nil;
 
+    // 長度必須在停止前取得，停止後 currentTime 會歸零。
+    NSTimeInterval duration = recorder.currentTime;
     [recorder stop];
     [AVAudioSession.sharedInstance setActive:NO
                                  withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
                                        error:nil];
     if(keepingState) return;
 
-    NSString* outputPath = relayPath(@"out.m4a");
+    NSString* outputPath = relayPath([NSString stringWithFormat:@"out_%@.m4a", self.sessionID]);
     NSNumber* size = nil;
     [[NSURL fileURLWithPath:outputPath] getResourceValue:&size forKey:NSURLFileSizeKey error:nil];
-    [self writeState:@"done" extra:@{@"size": size ?: @0}];
+    [self writeState:@"done" extra:@{@"size": size ?: @0, @"duration": @(duration)}];
+    self.sessionID = nil;
 }
 
 #pragma mark - 監聽

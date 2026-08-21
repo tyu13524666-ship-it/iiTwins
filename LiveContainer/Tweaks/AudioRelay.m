@@ -29,6 +29,10 @@ static const void* kRelayStateKey = &kRelayStateKey;
 @property(nonatomic, strong) NSDate* startedAt;
 @property(nonatomic) float averagePower;
 @property(nonatomic) float peakPower;
+// 每次代錄各有識別碼，成品與狀態都以它命名，同時有多個錄音器時才不會互相覆蓋。
+@property(nonatomic, copy) NSString* sessionID;
+// app 可能在停止之後才詢問長度，屆時已無從計算，因此先留下來。
+@property(nonatomic) NSTimeInterval lastDuration;
 @end
 
 @implementation LCRelayState
@@ -56,8 +60,8 @@ static NSString* relayPath(NSString* name) {
     return [dir stringByAppendingPathComponent:name];
 }
 
-static NSDictionary* readRelayState(void) {
-    NSString* path = relayPath(@"state.plist");
+static NSDictionary* readRelayState(NSString* sessionID) {
+    NSString* path = relayPath([NSString stringWithFormat:@"state_%@.plist", sessionID]);
     if(!path) return nil;
     return [NSDictionary dictionaryWithContentsOfURL:[NSURL fileURLWithPath:path]];
 }
@@ -105,17 +109,19 @@ static void relayLog(NSString* format, ...) {
     if([self lcRelay_record]) return YES;
     if(relayDisabled()) return NO;
 
-    // 把這個錄音器的格式設定交給主程式，讓成品盡量貼近 app 的預期。
-    NSString* settingsPath = relayPath(@"settings.plist");
-    if(!settingsPath) return NO;
-    NSDictionary* settings = self.settings ?: @{};
-    [settings writeToURL:[NSURL fileURLWithPath:settingsPath] error:nil];
-
-    NSString* statePath = relayPath(@"state.plist");
-    [NSFileManager.defaultManager removeItemAtPath:statePath error:nil];
+    // 把識別碼與格式設定交給主程式，讓成品盡量貼近 app 的預期。
+    NSString* sessionID = [[NSUUID UUID] UUIDString];
+    NSString* requestPath = relayPath(@"request.plist");
+    if(!requestPath) return NO;
+    NSDictionary* request = @{
+        @"sessionID": sessionID,
+        @"settings": self.settings ?: @{},
+    };
+    if(![request writeToURL:[NSURL fileURLWithPath:requestPath] error:nil]) return NO;
 
     LCRelayState* state = relayStateFor(self, YES);
     state.active = YES;
+    state.sessionID = sessionID;
     state.startedAt = [NSDate date];
     state.averagePower = -160.0f;
     state.peakPower = -160.0f;
@@ -133,6 +139,8 @@ static void relayLog(NSString* format, ...) {
         return;
     }
     state.active = NO;
+    state.lastDuration = [[NSDate date] timeIntervalSinceDate:state.startedAt];
+    NSString* sessionID = state.sessionID;
 
     CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
                                          (__bridge CFStringRef)kStopNotification, NULL, NULL, YES);
@@ -141,29 +149,39 @@ static void relayLog(NSString* format, ...) {
     // 期間必須讓執行緒短暫讓出，否則同一輪迴圈內收不到對方的寫入結果。
     NSDictionary* relayState = nil;
     for(int i = 0; i < 150; i++) {
-        relayState = readRelayState();
+        relayState = readRelayState(sessionID);
         if([relayState[@"state"] isEqualToString:@"done"] ||
            [relayState[@"state"] isEqualToString:@"failed"]) break;
         [NSThread sleepForTimeInterval:0.01];
     }
 
-    NSString* outputPath = relayPath(@"out.m4a");
+    NSString* outputPath = relayPath([NSString stringWithFormat:@"out_%@.m4a", sessionID]);
+    NSString* statePath = relayPath([NSString stringWithFormat:@"state_%@.plist", sessionID]);
     if(![relayState[@"state"] isEqualToString:@"done"] ||
        ![NSFileManager.defaultManager fileExistsAtPath:outputPath]) {
-        relayLog(@"主程式未能完成錄音：%@", relayState[@"error"] ?: relayState[@"state"] ?: @"逾時");
+        relayLog(@"主程式未能完成錄音：%@（app 端按住 %.2f 秒）",
+                 relayState[@"error"] ?: relayState[@"state"] ?: @"逾時", state.lastDuration);
+        [NSFileManager.defaultManager removeItemAtPath:statePath error:nil];
         [self lcRelay_notifyFinished:NO];
         return;
     }
 
     NSError* error = nil;
     [NSFileManager.defaultManager removeItemAtURL:self.url error:nil];
-    if(![NSFileManager.defaultManager copyItemAtPath:outputPath toPath:self.url.path error:&error]) {
+    BOOL moved = [NSFileManager.defaultManager copyItemAtPath:outputPath toPath:self.url.path error:&error];
+
+    // 成品與狀態都以識別碼命名，取走後隨即清掉，避免在共用區持續堆積。
+    [NSFileManager.defaultManager removeItemAtPath:outputPath error:nil];
+    [NSFileManager.defaultManager removeItemAtPath:statePath error:nil];
+
+    if(!moved) {
         relayLog(@"成品搬回失敗：%@", error.localizedDescription);
         [self lcRelay_notifyFinished:NO];
         return;
     }
 
-    relayLog(@"代錄完成，已放回 %@（%@ 位元組）", self.url.lastPathComponent, relayState[@"size"]);
+    relayLog(@"代錄完成，已放回 %@（%@ 位元組，主程式錄了 %@ 秒，app 端按住 %.2f 秒）",
+             self.url.lastPathComponent, relayState[@"size"], relayState[@"duration"], state.lastDuration);
     [self lcRelay_notifyFinished:YES];
 }
 
@@ -182,8 +200,9 @@ static void relayLog(NSString* format, ...) {
 
 - (NSTimeInterval)lcRelay_currentTime {
     LCRelayState* state = relayStateFor(self, NO);
-    if(!state.active) return [self lcRelay_currentTime];
-    return [[NSDate date] timeIntervalSinceDate:state.startedAt];
+    if(state.active) return [[NSDate date] timeIntervalSinceDate:state.startedAt];
+    if(state.lastDuration > 0) return state.lastDuration;
+    return [self lcRelay_currentTime];
 }
 
 - (void)lcRelay_updateMeters {
@@ -192,7 +211,7 @@ static void relayLog(NSString* format, ...) {
         [self lcRelay_updateMeters];
         return;
     }
-    NSDictionary* relayState = readRelayState();
+    NSDictionary* relayState = readRelayState(state.sessionID);
     NSNumber* average = relayState[@"averagePower"];
     NSNumber* peak = relayState[@"peakPower"];
     if(average) state.averagePower = average.floatValue;
