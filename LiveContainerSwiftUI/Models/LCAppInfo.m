@@ -527,7 +527,9 @@
     if(_info[@"hideLiveContainer"] != nil) {
         return [_info[@"hideLiveContainer"] boolValue];
     } else {
-        return NO;
+        // 這幾項預設開啟：實測容器內的 app 這樣執行最穩定。使用者若自行關閉會
+        // 存下該值，屆時以存下的為準，不受此處影響。
+        return YES;
     }
 }
 - (void)setHideLiveContainer:(bool)hideLiveContainer {
@@ -539,7 +541,9 @@
     if(_info[@"dontInjectTweakLoader"] != nil) {
         return [_info[@"dontInjectTweakLoader"] boolValue];
     } else {
-        return NO;
+        // 這幾項預設開啟：實測容器內的 app 這樣執行最穩定。使用者若自行關閉會
+        // 存下該值，屆時以存下的為準，不受此處影響。
+        return YES;
     }
 }
 - (void)setDontInjectTweakLoader:(bool)dontInjectTweakLoader {
@@ -557,7 +561,9 @@
     if(_info[@"dontLoadTweakLoader"] != nil) {
         return [_info[@"dontLoadTweakLoader"] boolValue];
     } else {
-        return NO;
+        // 這幾項預設開啟：實測容器內的 app 這樣執行最穩定。使用者若自行關閉會
+        // 存下該值，屆時以存下的為準，不受此處影響。
+        return YES;
     }
 }
 - (void)setDontLoadTweakLoader:(bool)dontLoadTweakLoader {
@@ -590,7 +596,9 @@
     if(_info[@"fixFilePickerNew"] != nil) {
         return [_info[@"fixFilePickerNew"] boolValue];
     } else {
-        return NO;
+        // 這幾項預設開啟：實測容器內的 app 這樣執行最穩定。使用者若自行關閉會
+        // 存下該值，屆時以存下的為準，不受此處影響。
+        return YES;
     }
 }
 
@@ -603,7 +611,9 @@
     if(_info[@"fixLocalNotification"] != nil) {
         return [_info[@"fixLocalNotification"] boolValue];
     } else {
-        return NO;
+        // 這幾項預設開啟：實測容器內的 app 這樣執行最穩定。使用者若自行關閉會
+        // 存下該值，屆時以存下的為準，不受此處影響。
+        return YES;
     }
 }
 

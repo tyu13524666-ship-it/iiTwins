@@ -687,6 +687,13 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         try fm.moveItem(at: appFolderPath, to: outputFolder)
         let finalNewApp = LCAppInfo(bundlePath: outputFolder.path)
         finalNewApp?.relativeBundlePath = appRelativePath
+
+        // 偽裝 SDK 版本預設開啟。它與其他選項不同，需要先讀出執行檔本身的 SDK
+        // 版本才能設定，因此只能在安裝當下處理，無法只給一個預設值。
+        // 取代既有 app 時不動，以免蓋掉使用者自己調過的設定。
+        if appToReplace == nil {
+            finalNewApp?.spoofSDKVersion = true
+        }
         
         guard let finalNewApp else {
             errorInfo = "lc.appList.appInfoInitError".loc
