@@ -199,6 +199,9 @@ static NSString* session_inputsDescription(AVAudioSession* session) {
     [self lcAudio_startRunning];
     audioLog(@"擷取工作階段 startRunning -> 執行中=%d 輸入 %lu 項 輸出 %lu 項",
              (int)self.isRunning, (unsigned long)self.inputs.count, (unsigned long)self.outputs.count);
+    for(AVCaptureOutput* output in self.outputs) {
+        audioLog(@"  輸出：%@", NSStringFromClass(output.class));
+    }
 }
 
 @end
@@ -239,6 +242,64 @@ static void observeCaptureErrors(void) {
     }];
 }
 
+#pragma mark - 取得擷取裝置
+
+// 實測顯示 app 錄影時只接了相機，從未詢問能否加上麥克風，也沒有用系統標準的
+// 錄影輸出。那表示它在更早的一步就放棄了 —— 很可能是跟系統要麥克風裝置時
+// 拿到空的。此處記錄要裝置與建立輸入的結果，確認是否如此。
+@interface AVCaptureDevice(LCAudioDiag)
+@end
+
+@implementation AVCaptureDevice(LCAudioDiag)
+
++ (AVCaptureDevice*)lcAudio_defaultDeviceWithMediaType:(AVMediaType)mediaType {
+    AVCaptureDevice* device = [self lcAudio_defaultDeviceWithMediaType:mediaType];
+    audioLog(@"要求預設擷取裝置（%@）-> %@", mediaType, device.localizedName ?: @"(沒有)");
+    return device;
+}
+
++ (NSArray<AVCaptureDevice*>*)lcAudio_devicesWithMediaType:(AVMediaType)mediaType {
+    NSArray* devices = [self lcAudio_devicesWithMediaType:mediaType];
+    audioLog(@"列出擷取裝置（%@）-> %lu 項", mediaType, (unsigned long)devices.count);
+    return devices;
+}
+
+@end
+
+@interface AVCaptureDeviceInput(LCAudioDiag)
+@end
+
+@implementation AVCaptureDeviceInput(LCAudioDiag)
+
++ (instancetype)lcAudio_deviceInputWithDevice:(AVCaptureDevice*)device error:(NSError**)outError {
+    id input = [self lcAudio_deviceInputWithDevice:device error:outError];
+    audioLog(@"建立擷取輸入（%@）-> %@%@", device.localizedName ?: @"(空裝置)",
+             input ? @"成功" : @"失敗",
+             (!input && outError && *outError) ? [NSString stringWithFormat:@" 錯誤=%@", *outError] : @"");
+    return input;
+}
+
+@end
+
+// 探索工作階段是較新的取得方式，app 可能改用它而非上面那兩個。
+@interface AVCaptureDeviceDiscoverySession(LCAudioDiag)
+@end
+
+@implementation AVCaptureDeviceDiscoverySession(LCAudioDiag)
+
++ (instancetype)lcAudio_discoverySessionWithDeviceTypes:(NSArray*)deviceTypes
+                                              mediaType:(AVMediaType)mediaType
+                                               position:(AVCaptureDevicePosition)position {
+    id session = [self lcAudio_discoverySessionWithDeviceTypes:deviceTypes
+                                                    mediaType:mediaType
+                                                     position:position];
+    audioLog(@"探索擷取裝置（%@）-> %lu 項", mediaType ?: @"未指定",
+             (unsigned long)[[session devices] count]);
+    return session;
+}
+
+@end
+
 #pragma mark - 掛載
 
 // 與 KeyboardRelayout 相同的安全做法：若該類別自身沒有實作，先以原名加上，
@@ -278,6 +339,16 @@ void AudioDiagHookInit(void) {
     audioSafeSwizzle(captureSession, @selector(canAddInput:), @selector(lcAudio_canAddInput:));
     audioSafeSwizzle(captureSession, @selector(addInput:), @selector(lcAudio_addInput:));
     audioSafeSwizzle(captureSession, @selector(startRunning), @selector(lcAudio_startRunning));
+
+    audioSafeSwizzle(object_getClass(AVCaptureDevice.class),
+                     @selector(defaultDeviceWithMediaType:), @selector(lcAudio_defaultDeviceWithMediaType:));
+    audioSafeSwizzle(object_getClass(AVCaptureDevice.class),
+                     @selector(devicesWithMediaType:), @selector(lcAudio_devicesWithMediaType:));
+    audioSafeSwizzle(object_getClass(AVCaptureDeviceInput.class),
+                     @selector(deviceInputWithDevice:error:), @selector(lcAudio_deviceInputWithDevice:error:));
+    audioSafeSwizzle(object_getClass(AVCaptureDeviceDiscoverySession.class),
+                     @selector(discoverySessionWithDeviceTypes:mediaType:position:),
+                     @selector(lcAudio_discoverySessionWithDeviceTypes:mediaType:position:));
 
     Class movieOutput = AVCaptureMovieFileOutput.class;
     audioSafeSwizzle(movieOutput, @selector(startRecordingToOutputFileURL:recordingDelegate:),
