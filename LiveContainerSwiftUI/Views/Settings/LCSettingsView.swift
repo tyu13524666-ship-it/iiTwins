@@ -8,7 +8,6 @@
 import Foundation
 import SwiftUI
 import UserNotifications
-import AVFoundation
 
 enum JITEnablerType : Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
@@ -69,9 +68,6 @@ struct LCSettingsView: View {
     
     @State var store : Store = .Unknown
 
-    // 主程式端的錄音自測結果。容器內的 app 在多工模式下取不到麥克風，
-    // 需要先確認主程式本身錄得到，才知道把錄音交給主程式代勞是否可行。
-    @State var audioProbeResult : String = ""
     
     @AppStorage("LCLoadTweaksToSelf") var injectToLCItelf = false
     @AppStorage("LCIgnoreJITOnLaunch") var ignoreJITOnLaunch = false
@@ -164,36 +160,6 @@ struct LCSettingsView: View {
                     }
                 }
                 
-                Section {
-                    if JITEnabler == .SideJITServer || JITEnabler == .JITStreamerEBLegacy {
-                        HStack {
-                            Text("lc.settings.JitAddress".loc)
-                            Spacer()
-                            TextField(JITEnabler == .SideJITServer ? "http://x.x.x.x:8080" : "http://[fd00::]:9172", text: $sideJITServerAddress)
-                                .multilineTextAlignment(.trailing)
-                        }
-                    }
-                    if JITEnabler == .SideJITServer {
-                        HStack {
-                            Text("lc.settings.JitUDID".loc)
-                            Spacer()
-                            TextField("", text: $deviceUDID)
-                                .multilineTextAlignment(.trailing)
-                        }
-                    }
-                    Picker(selection: $JITEnabler) {
-                        ForEach(JITEnablerType.allCases) { enablerType in
-                            Text(enablerType.displayName).tag(enablerType)
-                        }
-                    } label: {
-                        Text("lc.settings.jitEnabler".loc)
-                    }
-
-                } header: {
-                    Text("JIT")
-                } footer: {
-                    Text("lc.settings.JitDesc".loc)
-                }
                 
                 Section{
                     Toggle(isOn: $dynamicColors) {
@@ -214,41 +180,19 @@ struct LCSettingsView: View {
                     Toggle(isOn: $disableKeychainIsolation) {
                         Text("停用鑰匙圈隔離")
                     }
-                    Text("預設會讓同一個 App 的不同容器各自使用獨立的鑰匙圈，以便分別登入不同帳號。若 App 出現解密失敗或登入狀態異常，可開啟此選項改用本程式的鑰匙圈，但屆時多個容器將共用同一份登入資料。\n\n⚠️ 切換此選項後，已登入的 App 會找不到原本存放的登入資料，很可能需要重新登入。請在切換前先確認重新登入不會造成困擾。")
-                        .font(.footnote)
-                        .foregroundStyle(.gray)
                     Toggle(isOn: Binding(
                         get: { !disableKeychainGroupRemap },
                         set: { disableKeychainGroupRemap = !$0 }
                     )) {
                         Text("修正 App 指定的鑰匙圈群組")
                     }
-                    Text("有些 App 會指定自家的鑰匙圈群組，在本程式中執行時無權存取，導致取不到金鑰而無法解密自己的資料（例如新版 LINE 登入後重開就失效）。開啟後，只有在系統確實回覆權限不足時，才會移除該指定並改用系統配給本程式的群組重試一次，同時在項目名稱加註容器識別碼，讓各容器維持各自獨立的登入狀態。\n\n原本就能正常存取的請求完全不經過改寫，不受任何影響。切換此選項會改變項目的存放位置，受影響的 App 需要重新登入。")
-                        .font(.footnote)
-                        .foregroundStyle(.gray)
                     Toggle(isOn: $isolateSecKeys) {
                         Text("連加密金鑰一併隔離")
                     }
                     .disabled(disableKeychainIsolation)
-                    Text("加密金鑰（Secure Enclave 產生的那類）預設不隔離，因為它們會綁定產生當下的環境，改動後就無法再取用。除非同一個 App 的多個容器出現金鑰互相干擾，否則維持關閉。")
-                        .font(.footnote)
-                        .foregroundStyle(.gray)
                     Toggle(isOn: $keychainDiagnostics) {
                         Text("記錄診斷日誌")
                     }
-                    Button {
-                        probeHostRecording()
-                    } label: {
-                        Text("測試本程式能否錄音")
-                    }
-                    if !audioProbeResult.isEmpty {
-                        Text(audioProbeResult)
-                            .font(.footnote)
-                            .foregroundStyle(.gray)
-                    }
-                    Text("記錄容器內 App 存取鑰匙圈與金鑰的結果，以及鍵盤位置的計算過程，用來查明加密或版面異常的原因。日誌只含操作名稱、錯誤碼與尺寸數值，不含密碼或金鑰內容，存放於容器的 Documents 之下（LCKeychainDiag.log 與 LCKeyboardDiag.log）。平時請保持關閉，會拖慢速度並持續佔用空間。")
-                        .font(.footnote)
-                        .foregroundStyle(.gray)
                     Toggle(isOn: $frameShortIcon) {
                         Text("lc.settings.FrameIcon".loc)
                     }
@@ -478,81 +422,6 @@ struct LCSettingsView: View {
         }
     }
     
-    // 在主程式自己的進程裡實際錄一小段，判斷麥克風取不取得到。
-    // 多工模式下 app 跑在擴充功能中，系統不給麥克風；若主程式這裡錄得起來，
-    // 就有機會把容器內 app 的錄音轉由主程式代勞。
-    func probeHostRecording() {
-        audioProbeResult = "測試中…"
-
-        let start = {
-            let session = AVAudioSession.sharedInstance()
-            do {
-                try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
-                try session.setActive(true)
-            } catch {
-                audioProbeResult = "無法啟用音訊工作階段：\(error.localizedDescription)"
-                return
-            }
-
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("lc_host_recording_probe.m4a")
-            try? FileManager.default.removeItem(at: url)
-
-            let settings: [String: Any] = [
-                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-                AVSampleRateKey: 44100.0,
-                AVNumberOfChannelsKey: 1,
-                AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue,
-            ]
-
-            let recorder: AVAudioRecorder
-            do {
-                recorder = try AVAudioRecorder(url: url, settings: settings)
-            } catch {
-                audioProbeResult = "無法建立錄音器：\(error.localizedDescription)"
-                return
-            }
-
-            guard recorder.prepareToRecord() else {
-                audioProbeResult = "錄音器準備失敗（寫入位置有問題）"
-                return
-            }
-            guard recorder.record() else {
-                audioProbeResult = "✗ 開始錄音被拒絕。主程式本身也錄不到，代表不是擴充功能的限制。"
-                return
-            }
-
-            audioProbeResult = "錄音中，請說句話…"
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                recorder.stop()
-                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-                try? session.setActive(false)
-                if size > 2000 {
-                    audioProbeResult = "✓ 主程式錄得到（1.5 秒 \(size) 位元組）。多工模式的錄音可以交給主程式代勞。"
-                } else {
-                    audioProbeResult = "△ 錄音有開始，但幾乎沒收到聲音（僅 \(size) 位元組）。"
-                }
-            }
-        }
-
-        switch AVAudioSession.sharedInstance().recordPermission {
-        case .granted:
-            start()
-        case .denied:
-            audioProbeResult = "麥克風權限被拒絕，請到「設定 → 隱私權與安全性 → 麥克風」開啟。"
-        default:
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                DispatchQueue.main.async {
-                    if granted {
-                        start()
-                    } else {
-                        audioProbeResult = "麥克風權限未授予。"
-                    }
-                }
-            }
-        }
-    }
-
     func clearNotifications() {
         let notificationCenter = UNUserNotificationCenter.current()
         notificationCenter.removeAllDeliveredNotifications()
