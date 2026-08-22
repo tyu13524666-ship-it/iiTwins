@@ -168,6 +168,77 @@ static NSString* session_inputsDescription(AVAudioSession* session) {
 
 @end
 
+#pragma mark - 擷取工作階段（錄影）
+
+// 錄影與錄音走的是兩條路：錄音用 AVAudioRecorder，錄影用相機的擷取工作階段。
+// 拍照可用而錄影停在 0 秒，差別在於錄影要多接一個麥克風輸入，而擴充功能拿不到
+// 麥克風。此處記錄輸入接得成不成、工作階段跑不跑得起來、以及錄製的結束原因，
+// 以確定實際卡在哪一步。
+@interface AVCaptureSession(LCAudioDiag)
+@end
+
+@implementation AVCaptureSession(LCAudioDiag)
+
+- (BOOL)lcAudio_canAddInput:(AVCaptureInput*)input {
+    BOOL ok = [self lcAudio_canAddInput:input];
+    audioLog(@"擷取工作階段 canAddInput:%@ -> %d", input, (int)ok);
+    return ok;
+}
+
+- (void)lcAudio_addInput:(AVCaptureInput*)input {
+    [self lcAudio_addInput:input];
+    NSString* kind = @"其他";
+    if([input isKindOfClass:AVCaptureDeviceInput.class]) {
+        AVCaptureDevice* device = [(AVCaptureDeviceInput *)input device];
+        kind = [device hasMediaType:AVMediaTypeAudio] ? @"麥克風" : @"相機";
+    }
+    audioLog(@"擷取工作階段 addInput（%@）-> 目前輸入共 %lu 項", kind, (unsigned long)self.inputs.count);
+}
+
+- (void)lcAudio_startRunning {
+    [self lcAudio_startRunning];
+    audioLog(@"擷取工作階段 startRunning -> 執行中=%d 輸入 %lu 項 輸出 %lu 項",
+             (int)self.isRunning, (unsigned long)self.inputs.count, (unsigned long)self.outputs.count);
+}
+
+@end
+
+@interface AVCaptureMovieFileOutput(LCAudioDiag)
+@end
+
+@implementation AVCaptureMovieFileOutput(LCAudioDiag)
+
+- (void)lcAudio_startRecordingToOutputFileURL:(NSURL*)url
+                             recordingDelegate:(id<AVCaptureFileOutputRecordingDelegate>)delegate {
+    audioLog(@"開始錄影 -> %@", url.lastPathComponent);
+    audioLog(@"  目的地目錄 %@", describeDirectory(url));
+    [self lcAudio_startRecordingToOutputFileURL:url recordingDelegate:delegate];
+    audioLog(@"  錄製中=%d", (int)self.isRecording);
+}
+
+- (void)lcAudio_stopRecording {
+    audioLog(@"停止錄影（已錄 %.2f 秒）", CMTimeGetSeconds(self.recordedDuration));
+    [self lcAudio_stopRecording];
+}
+
+@end
+
+// 擷取工作階段出錯時系統只發通知，不會有回傳值可看，因此另外聽一則。
+static void observeCaptureErrors(void) {
+    [NSNotificationCenter.defaultCenter addObserverForName:AVCaptureSessionRuntimeErrorNotification
+                                                    object:nil
+                                                     queue:nil
+                                                usingBlock:^(NSNotification* note) {
+        audioLog(@"擷取工作階段發生錯誤：%@", note.userInfo[AVCaptureSessionErrorKey]);
+    }];
+    [NSNotificationCenter.defaultCenter addObserverForName:AVCaptureSessionWasInterruptedNotification
+                                                    object:nil
+                                                     queue:nil
+                                                usingBlock:^(NSNotification* note) {
+        audioLog(@"擷取工作階段被中斷，原因代碼=%@", note.userInfo[AVCaptureSessionInterruptionReasonKey]);
+    }];
+}
+
 #pragma mark - 掛載
 
 // 與 KeyboardRelayout 相同的安全做法：若該類別自身沒有實作，先以原名加上，
@@ -202,6 +273,18 @@ void AudioDiagHookInit(void) {
     audioSafeSwizzle(recorderClass, @selector(initWithURL:settings:error:), @selector(lcAudio_initWithURL:settings:error:));
     audioSafeSwizzle(recorderClass, @selector(prepareToRecord), @selector(lcAudio_prepareToRecord));
     audioSafeSwizzle(recorderClass, @selector(record), @selector(lcAudio_record));
+
+    Class captureSession = AVCaptureSession.class;
+    audioSafeSwizzle(captureSession, @selector(canAddInput:), @selector(lcAudio_canAddInput:));
+    audioSafeSwizzle(captureSession, @selector(addInput:), @selector(lcAudio_addInput:));
+    audioSafeSwizzle(captureSession, @selector(startRunning), @selector(lcAudio_startRunning));
+
+    Class movieOutput = AVCaptureMovieFileOutput.class;
+    audioSafeSwizzle(movieOutput, @selector(startRecordingToOutputFileURL:recordingDelegate:),
+                     @selector(lcAudio_startRecordingToOutputFileURL:recordingDelegate:));
+    audioSafeSwizzle(movieOutput, @selector(stopRecording), @selector(lcAudio_stopRecording));
+
+    observeCaptureErrors();
 
     AVAudioSession* session = AVAudioSession.sharedInstance;
     audioLog(@"===== 音訊診斷已掛上 =====");
