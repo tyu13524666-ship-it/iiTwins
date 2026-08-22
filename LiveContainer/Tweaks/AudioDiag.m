@@ -300,6 +300,45 @@ static void observeCaptureErrors(void) {
 
 @end
 
+#pragma mark - 自行組裝的影片寫入
+
+// 實測顯示 app 的擷取工作階段只掛了掃碼、影像畫面與拍照三種輸出，沒有系統
+// 標準的錄影輸出，也從未索取麥克風。可見它是取得影像畫面後自行寫成影片檔。
+// 這條路的成敗只反映在寫入器的狀態與錯誤上，於此記錄。
+@interface AVAssetWriter(LCAudioDiag)
+@end
+
+@implementation AVAssetWriter(LCAudioDiag)
+
+- (BOOL)lcAudio_startWriting {
+    BOOL ok = [self lcAudio_startWriting];
+    audioLog(@"影片寫入器 startWriting -> %d（%@）", (int)ok, self.outputURL.lastPathComponent);
+    for(AVAssetWriterInput* input in self.inputs) {
+        audioLog(@"  軌道：%@", input.mediaType);
+    }
+    if(!ok) audioLog(@"  狀態=%ld 錯誤=%@", (long)self.status, self.error);
+    return ok;
+}
+
+- (void)lcAudio_finishWritingWithCompletionHandler:(void (^)(void))handler {
+    audioLog(@"影片寫入器 finishWriting，此刻狀態=%ld", (long)self.status);
+    [self lcAudio_finishWritingWithCompletionHandler:^{
+        audioLog(@"影片寫入器完成，狀態=%ld 錯誤=%@", (long)self.status, self.error ?: @"(無)");
+        NSNumber* size = nil;
+        [self.outputURL getResourceValue:&size forKey:NSURLFileSizeKey error:nil];
+        audioLog(@"  成品 %@ 大小=%@", self.outputURL.lastPathComponent, size ?: @"(讀不到)");
+        if(handler) handler();
+    }];
+}
+
+- (BOOL)lcAudio_canAddInput:(AVAssetWriterInput*)input {
+    BOOL ok = [self lcAudio_canAddInput:input];
+    audioLog(@"影片寫入器 canAddInput（%@）-> %d", input.mediaType, (int)ok);
+    return ok;
+}
+
+@end
+
 #pragma mark - 掛載
 
 // 與 KeyboardRelayout 相同的安全做法：若該類別自身沒有實作，先以原名加上，
@@ -354,6 +393,12 @@ void AudioDiagHookInit(void) {
     audioSafeSwizzle(movieOutput, @selector(startRecordingToOutputFileURL:recordingDelegate:),
                      @selector(lcAudio_startRecordingToOutputFileURL:recordingDelegate:));
     audioSafeSwizzle(movieOutput, @selector(stopRecording), @selector(lcAudio_stopRecording));
+
+    Class assetWriter = AVAssetWriter.class;
+    audioSafeSwizzle(assetWriter, @selector(startWriting), @selector(lcAudio_startWriting));
+    audioSafeSwizzle(assetWriter, @selector(finishWritingWithCompletionHandler:),
+                     @selector(lcAudio_finishWritingWithCompletionHandler:));
+    audioSafeSwizzle(assetWriter, @selector(canAddInput:), @selector(lcAudio_canAddInput:));
 
     observeCaptureErrors();
 
