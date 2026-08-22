@@ -711,8 +711,11 @@ struct LCSourcesView: View {
                     }
                 }
                 if let sourceUrl {
-                    DataManager.shared.model.selectedTab = .sources
-                    Task { await handleAddSource(sourceUrl) }
+                    // 來源分頁隱藏時切過去會落到不存在的分頁，畫面會停在空白。
+                    if showSourcesAndTweaksTabs {
+                        DataManager.shared.model.selectedTab = .sources
+                        Task { await handleAddSource(sourceUrl) }
+                    }
                 }
             }
         }

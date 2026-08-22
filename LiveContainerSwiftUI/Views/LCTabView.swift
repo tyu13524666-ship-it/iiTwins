@@ -8,6 +8,10 @@
 import Foundation
 import SwiftUI
 
+// 來源與補丁兩個分頁目前不使用：來源是訂閱第三方 App 商店用的，補丁是載入
+// 額外的 .dylib 用的，兩者都與現在的用法無關。要恢復顯示，把這裡改回 true。
+let showSourcesAndTweaksTabs = false
+
 struct LCTabView: View {
     @State var errorShow = false
     @State var crashReportShow = false
@@ -23,7 +27,7 @@ struct LCTabView: View {
     
     var body: some View {
         TabView(selection: $sharedModel.selectedTab) {
-            if DataManager.shared.model.multiLCStatus != 2 {
+            if showSourcesAndTweaksTabs && DataManager.shared.model.multiLCStatus != 2 {
                 LCSourcesView()
                     .tabItem {
                         Label("lc.tabView.sources".loc, systemImage: "books.vertical")
@@ -35,7 +39,7 @@ struct LCTabView: View {
                     Label("lc.tabView.apps".loc, systemImage: "square.stack.3d.up.fill")
                 }
                 .tag(LCTabIdentifier.apps)
-            if DataManager.shared.model.multiLCStatus != 2 {
+            if showSourcesAndTweaksTabs && DataManager.shared.model.multiLCStatus != 2 {
                 LCTweaksView()
                     .tabItem{
                         Label("lc.tabView.tweaks".loc, systemImage: "wrench.and.screwdriver")
