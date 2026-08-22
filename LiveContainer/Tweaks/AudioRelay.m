@@ -22,6 +22,11 @@ static NSString* const kStopNotification  = @"com.tyu.iitwins.audio.stop";
 
 static const void* kRelayStateKey = &kRelayStateKey;
 
+// 代錄進行中。主程式一啟用自己的音訊工作階段就會搶走麥克風，系統隨即通知
+// app「錄音被打斷」，app 因而立刻收手 —— 實測 app 每次都在 30 毫秒後停止。
+// 代錄期間必須把這類通知擋下來，否則幫它錄音等於在它耳邊踢一腳。
+static BOOL gRelayActive = NO;
+
 #pragma mark - 每個錄音器的代理狀態
 
 @interface LCRelayState : NSObject
@@ -33,6 +38,11 @@ static const void* kRelayStateKey = &kRelayStateKey;
 @property(nonatomic, copy) NSString* sessionID;
 // app 可能在停止之後才詢問長度，屆時已無從計算，因此先留下來。
 @property(nonatomic) NSTimeInterval lastDuration;
+// app 在錄音期間查了什麼、查了幾次。若它仍提早收手，這些數字能指出它依據
+// 哪一項判斷，省得再從頭猜起。
+@property(nonatomic) int askedRecording;
+@property(nonatomic) int askedTime;
+@property(nonatomic) int askedMeters;
 @end
 
 @implementation LCRelayState
@@ -123,9 +133,12 @@ static void relayLog(NSString* format, ...) {
     state.active = YES;
     state.sessionID = sessionID;
     state.startedAt = [NSDate date];
-    state.averagePower = -160.0f;
-    state.peakPower = -160.0f;
+    // 主程式要數十毫秒才會送出第一筆音量。這段空窗若回報靜音，app 會以為
+    // 麥克風沒有反應，因此先給一個尋常說話的音量，待真實數值到達再取代。
+    state.averagePower = -24.0f;
+    state.peakPower = -18.0f;
 
+    gRelayActive = YES;
     CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
                                          (__bridge CFStringRef)kStartNotification, NULL, NULL, YES);
     relayLog(@"錄音被系統拒絕，已請主程式代錄（%@）", self.url.lastPathComponent);
@@ -141,6 +154,7 @@ static void relayLog(NSString* format, ...) {
     state.active = NO;
     state.lastDuration = [[NSDate date] timeIntervalSinceDate:state.startedAt];
     NSString* sessionID = state.sessionID;
+    gRelayActive = NO;
 
     CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
                                          (__bridge CFStringRef)kStopNotification, NULL, NULL, YES);
@@ -182,6 +196,8 @@ static void relayLog(NSString* format, ...) {
 
     relayLog(@"代錄完成，已放回 %@（%@ 位元組，主程式錄了 %@ 秒，app 端按住 %.2f 秒）",
              self.url.lastPathComponent, relayState[@"size"], relayState[@"duration"], state.lastDuration);
+    relayLog(@"  期間 app 查詢：是否錄音中 %d 次、目前長度 %d 次、音量 %d 次",
+             state.askedRecording, state.askedTime, state.askedMeters);
     [self lcRelay_notifyFinished:YES];
 }
 
@@ -195,12 +211,17 @@ static void relayLog(NSString* format, ...) {
 
 - (BOOL)lcRelay_isRecording {
     LCRelayState* state = relayStateFor(self, NO);
-    return state.active ? YES : [self lcRelay_isRecording];
+    if(!state.active) return [self lcRelay_isRecording];
+    state.askedRecording++;
+    return YES;
 }
 
 - (NSTimeInterval)lcRelay_currentTime {
     LCRelayState* state = relayStateFor(self, NO);
-    if(state.active) return [[NSDate date] timeIntervalSinceDate:state.startedAt];
+    if(state.active) {
+        state.askedTime++;
+        return [[NSDate date] timeIntervalSinceDate:state.startedAt];
+    }
     if(state.lastDuration > 0) return state.lastDuration;
     return [self lcRelay_currentTime];
 }
@@ -211,6 +232,7 @@ static void relayLog(NSString* format, ...) {
         [self lcRelay_updateMeters];
         return;
     }
+    state.askedMeters++;
     NSDictionary* relayState = readRelayState(state.sessionID);
     NSNumber* average = relayState[@"averagePower"];
     NSNumber* peak = relayState[@"peakPower"];
@@ -226,6 +248,43 @@ static void relayLog(NSString* format, ...) {
 - (float)lcRelay_peakPowerForChannel:(NSUInteger)channel {
     LCRelayState* state = relayStateFor(self, NO);
     return state.active ? state.peakPower : [self lcRelay_peakPowerForChannel:channel];
+}
+
+@end
+
+#pragma mark - 攔下代錄期間的音訊中斷
+
+// 主程式接手錄音時，系統會告訴 app 它的錄音被打斷了。app 收到便停止錄音，
+// 於是代錄雖然成功，成品卻只有幾十毫秒。代錄期間把這類通知擋下來，讓 app
+// 以為自己一直在錄；其餘通知一律照常送達。
+@interface NSNotificationCenter(LCAudioRelay)
+@end
+
+@implementation NSNotificationCenter(LCAudioRelay)
+
+static BOOL shouldWithhold(NSNotificationName name, NSDictionary* userInfo) {
+    if(!gRelayActive) return NO;
+    if(![name isEqualToString:AVAudioSessionInterruptionNotification]) return NO;
+    relayLog(@"攔下音訊中斷通知（%@），代錄期間不轉給 app",
+             userInfo[AVAudioSessionInterruptionTypeKey] ?: @"未註明");
+    return YES;
+}
+
+- (void)lcRelay_postNotificationName:(NSNotificationName)name
+                              object:(id)object
+                            userInfo:(NSDictionary*)userInfo {
+    if(shouldWithhold(name, userInfo)) return;
+    [self lcRelay_postNotificationName:name object:object userInfo:userInfo];
+}
+
+- (void)lcRelay_postNotificationName:(NSNotificationName)name object:(id)object {
+    if(shouldWithhold(name, nil)) return;
+    [self lcRelay_postNotificationName:name object:object];
+}
+
+- (void)lcRelay_postNotification:(NSNotification*)notification {
+    if(shouldWithhold(notification.name, notification.userInfo)) return;
+    [self lcRelay_postNotification:notification];
 }
 
 @end
@@ -264,6 +323,14 @@ void AudioRelayHookInit(void) {
     relaySafeSwizzle(cls, @selector(updateMeters), @selector(lcRelay_updateMeters));
     relaySafeSwizzle(cls, @selector(averagePowerForChannel:), @selector(lcRelay_averagePowerForChannel:));
     relaySafeSwizzle(cls, @selector(peakPowerForChannel:), @selector(lcRelay_peakPowerForChannel:));
+
+    Class centerClass = NSNotificationCenter.class;
+    relaySafeSwizzle(centerClass, @selector(postNotificationName:object:userInfo:),
+                     @selector(lcRelay_postNotificationName:object:userInfo:));
+    relaySafeSwizzle(centerClass, @selector(postNotificationName:object:),
+                     @selector(lcRelay_postNotificationName:object:));
+    relaySafeSwizzle(centerClass, @selector(postNotification:),
+                     @selector(lcRelay_postNotification:));
 
     relayLog(@"===== 錄音代理已掛上 =====");
 }
