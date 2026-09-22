@@ -78,11 +78,38 @@ static void kbNudgeScrollViews(UIView* view, int depth) {
     }
 }
 
+// 找出目前持有輸入焦點的 view（用來在日誌裡分辨「聊天輸入框」vs「疊出來的小視窗輸入框」）
+static UIView* kbFindFirstResponder(UIView* view) {
+    if(!view) return nil;
+    if(view.isFirstResponder) return view;
+    for(UIView* sub in view.subviews) {
+        UIView* r = kbFindFirstResponder(sub);
+        if(r) return r;
+    }
+    return nil;
+}
+
 static void kbPostSyntheticDismissal(UIWindow* window) {
     if(!window || CGRectIsEmpty(window.bounds)) return;
     // 鍵盤與各式浮層自身的視窗不需要處理，補送通知反而可能造成干擾
     UIViewController* rootVC = window.rootViewController;
     if(!rootVC || [rootVC isKindOfClass:NSClassFromString(@"UIInputWindowController")]) return;
+
+    // 【2026-09-22 依 log 修正】聊天室與「變更好友名稱」等畫面是同一個 UIWindow
+    // （rootVC 都是 LINE.MainRootViewController），無法用視窗身分分辨。差別在於改名字那種
+    // 是被 present 疊上來的小視窗(modal)。這個 relayout hack 只對主畫面聊天列有意義；
+    // 對疊上來的 modal 補送「鍵盤已離開」會被它當成要收鍵盤 → 點一下鍵盤閃一下就消失。
+    // 對策：上層只要有 present 出來的視窗就跳過補送，交還給系統原本的鍵盤處理。
+    // 同時把 presentedVC / firstResponder 印進 log，萬一判斷不夠準，下一版可據此再收斂。
+    UIViewController* presented = rootVC.presentedViewController;
+    UIView* firstResponder = kbFindFirstResponder(window);
+    kbLog(@"  presentedVC=%@ firstResponder=%@",
+          presented ? NSStringFromClass(presented.class) : @"(無)",
+          firstResponder ? NSStringFromClass(firstResponder.class) : @"(無)");
+    if(presented) {
+        kbLog(@"  → 上層有 present 出來的視窗，跳過補送鍵盤離開（避免打掉它的鍵盤）");
+        return;
+    }
 
     UIViewController* root = window.rootViewController;
     kbLog(@"  視窗=%@ rootVC=%@ rootView=%@ 安全區下緣=%.1f",
