@@ -237,11 +237,14 @@ static void kbObserveDeactivation(void) {
                                     CFSTR("com.tyu.iitwins.window.minimized"),
                                     NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
 
-    // 一併監聽失去焦點類的通知作為後備；多工模式下未必送出，由日誌判斷
+    // 只保留「真的進背景」這類通知作為後備。原本還監聽 WillResignActive /
+    // SceneWillDeactivate，但那兩者在「app 於自己進程內疊出一個新視窗」時也會
+    // 觸發——例如 LINE 點「變更好友名稱」會疊出一個獨立視窗，主場景瞬間失去
+    // 作用 → 這裡把剛跳出來的鍵盤 endEditing 打掉 → 使用者點輸入框只看到鍵盤
+    // 閃一下就消失、打不了字。真正的視窗最小化由上面那則
+    // com.tyu.iitwins.window.minimized 跨進程通知負責，不需要靠這兩個過激的通知。
     NSArray<NSNotificationName>* names = @[
-        UIApplicationWillResignActiveNotification,
         UIApplicationDidEnterBackgroundNotification,
-        UISceneWillDeactivateNotification,
         UISceneDidEnterBackgroundNotification,
     ];
     for(NSNotificationName name in names) {
