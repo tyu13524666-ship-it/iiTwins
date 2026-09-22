@@ -139,11 +139,37 @@ static void kbPostSyntheticDismissal(UIWindow* window) {
     kbLog(@"  已補送鍵盤離開通知並促使捲動元件重算 frame=%@", NSStringFromCGRect(offscreen));
 }
 
+// 【2026-09-23】偵測 app 目前是否有 present 出來的 modal（例如 LINE 的「變更好友名稱」），
+// 有的話發跨進程通知，讓視窗端暫停「縮視窗避讓」——縮視窗會把 modal 的輸入框連累放棄
+// 焦點，造成點輸入框鍵盤閃一下就消失。只看 app 自己的主視窗（isMemberOfClass UIWindow），
+// 跳過鍵盤/HUD/特效等系統視窗（那些是子類別），避免誤判成有 modal 而害聊天室鍵盤又擋內容。
+static BOOL kbAppHasPresentedModal(void) {
+    for(UIWindow* w in UIApplication.sharedApplication.windows) {
+        if(![w isMemberOfClass:UIWindow.class]) continue;
+        if(CGRectIsEmpty(w.bounds)) continue;
+        if(w.rootViewController.presentedViewController) return YES;
+    }
+    return NO;
+}
+
+static void kbUpdateModalState(void) {
+    static int last = -1;
+    BOOL now = kbAppHasPresentedModal();
+    if(last == (int)now) return;
+    last = (int)now;
+    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+        now ? CFSTR("com.tyu.iitwins.guest.modalOn") : CFSTR("com.tyu.iitwins.guest.modalOff"),
+        NULL, NULL, YES);
+    kbLog(@"  → 通知視窗端：guest %@ modal（%@縮視窗）",
+          now ? @"有" : @"沒", now ? @"暫停" : @"恢復");
+}
+
 // 三個 hook 共用：高度確有變動時記錄並補送鍵盤事件。
 static void kbHandleHeightChange(UIWindow* window, NSString* via, CGFloat before, CGFloat after) {
     // 雙重保險：即使掛載方式有誤而波及其他視圖，也只處理真正的 UIWindow
     if(![window isKindOfClass:UIWindow.class]) return;
     if(fabs(before - after) < 1.0) return;
+    kbUpdateModalState();   // 視窗一動就順手更新 modal 狀態（計時器之外的補強）
     kbLog(@"視窗高度變動 %.1f -> %.1f（來源 %@）", before, after, via);
     if(kbDisabled()) {
         kbLog(@"  （使用者已停用，不處理）");
@@ -299,6 +325,14 @@ void KeyboardRelayoutHookInit(void) {
     kbSafeSwizzle(UIWindow.class, @selector(setFrame:), @selector(lcKB_setFrame:));
     kbSafeSwizzle(UIWindow.class, @selector(layoutSubviews), @selector(lcKB_layoutSubviews));
     kbObserveDeactivation();
+
+    // 定時偵測 modal 狀態並通知視窗端（modal 出現不一定伴隨視窗高度變化，故用計時器保底，
+    // 且趁使用者點輸入框「之前」modal 已開著時就先通知到，避開競態）。
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [NSTimer scheduledTimerWithTimeInterval:0.3 repeats:YES block:^(NSTimer* timer) {
+            kbUpdateModalState();
+        }];
+    });
 
     // 延後再記一次，確認 app 啟動後的視窗狀態
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{

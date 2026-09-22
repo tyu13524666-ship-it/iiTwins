@@ -235,6 +235,32 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
     fclose(f);
 }
 
+#pragma mark - guest 端 modal 狀態（跨進程）
+
+// guest 進程（注入的 KeyboardRelayout）偵測到自己有 present 出來的 modal（如 LINE
+// 「變更好友名稱」）時會發這兩個 Darwin 通知。有 modal 時視窗端暫停「縮視窗避讓」，
+// 交給 modal 自己用系統原生方式避讓——否則縮視窗會把 modal 的輸入框連累放棄焦點，
+// 使用者點輸入框鍵盤閃一下就消失。
+static BOOL gGuestHasPresentedModal = NO;
+
+static void lcGuestModalCallback(CFNotificationCenterRef center, void* observer,
+                                 CFStringRef name, const void* object, CFDictionaryRef userInfo) {
+    gGuestHasPresentedModal = (name && CFEqual(name, CFSTR("com.tyu.iitwins.guest.modalOn")));
+}
+
+static void lcObserveGuestModalOnce(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        CFNotificationCenterRef center = CFNotificationCenterGetDarwinNotifyCenter();
+        CFNotificationCenterAddObserver(center, NULL, lcGuestModalCallback,
+            CFSTR("com.tyu.iitwins.guest.modalOn"), NULL,
+            CFNotificationSuspensionBehaviorDeliverImmediately);
+        CFNotificationCenterAddObserver(center, NULL, lcGuestModalCallback,
+            CFSTR("com.tyu.iitwins.guest.modalOff"), NULL,
+            CFNotificationSuspensionBehaviorDeliverImmediately);
+    });
+}
+
 @implementation DecoratedAppSceneViewController
 - (instancetype)initWindowName:(NSString*)windowName bundleId:(NSString*)bundleId dataUUID:(NSString*)dataUUID rootVC:(UIViewController*)rootVC {
     self = [super initWithNibName:nil bundle:nil];
@@ -256,6 +282,7 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
                                            selector:@selector(lcKeyboardFrameWillChange:)
                                                name:UIKeyboardWillChangeFrameNotification
                                              object:nil];
+    lcObserveGuestModalOnce();   // 接收 guest 端「有無 modal」的跨進程通知
     LCKeyboardDiagLog(dataUUID, @"===== 視窗建立 %@ 最大化=%d =====", windowName, _isMaximized);
 
     // 視窗內的 app 跑在擴充功能中，系統不給它麥克風。開始待命，必要時代為錄音。
@@ -833,6 +860,13 @@ static void LCKeyboardDiagLog(NSString* dataUUID, NSString* format, ...) {
     CGFloat windowBottom = CGRectGetMaxY(frameInWindow) + self.keyboardInset;
     CGFloat overlap = windowBottom - CGRectGetMinY(kbInWindow);
     if(overlap < 0 || CGRectIsEmpty(kbInWindow)) overlap = 0;
+
+    // guest 有 modal 疊在上層時不縮視窗（overlap 當 0；若先前已縮，這裡會使其還原成全高），
+    // 交給 modal 用系統原生方式避讓，避免縮視窗把 modal 輸入框連累放棄焦點造成鍵盤閃退。
+    if(gGuestHasPresentedModal && overlap > 0) {
+        LCKeyboardDiagLog(self.dataUUID, @"  （guest 有 modal，暫停縮視窗，交系統原生避讓）");
+        overlap = 0;
+    }
 
     LCKeyboardDiagLog(self.dataUUID,
                       @"鍵盤 螢幕=%@ | 本視窗=%@ 底部=%.1f | 重疊=%.1f 目前安全區加值=%.1f 最大化=%d 縮放=%.2f",
